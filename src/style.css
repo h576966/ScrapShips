@@ -1,0 +1,236 @@
+html,
+body,
+#game-root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  position: relative;
+}
+
+body {
+  overflow: hidden;
+  background: #050910;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+canvas {
+  display: block;
+}
+
+.garage-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: auto;
+  background: #07111c;
+  color: #e8f4ff;
+}
+
+.garage-ui button,
+.garage-ui input,
+.garage-ui select {
+  font: inherit;
+}
+
+.garage-shell {
+  box-sizing: border-box;
+  width: min(1180px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.garage-header,
+.panel-title,
+.button-row,
+.color-row,
+.attribute-row,
+.ship-row {
+  display: flex;
+  align-items: center;
+}
+
+.garage-header {
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.garage-header h1,
+.garage-panel h2,
+.garage-panel h3,
+.garage-header p {
+  margin: 0;
+}
+
+.garage-header h1 {
+  font-size: 30px;
+}
+
+.garage-header p,
+.ship-count,
+.stats-line,
+.ship-row small,
+.panel-title span {
+  color: #adc2d9;
+}
+
+.garage-actions,
+.button-row,
+.color-row {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.garage-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(340px, 1.35fr) minmax(240px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.garage-panel {
+  box-sizing: border-box;
+  border: 1px solid #25415f;
+  border-radius: 8px;
+  background: rgba(8, 18, 30, 0.94);
+  padding: 14px;
+}
+
+.garage-panel.selected {
+  border-color: #62b3ff;
+}
+
+.panel-title {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.field-label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: #cfe0f1;
+  font-size: 13px;
+}
+
+.garage-ui input,
+.garage-ui select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #31516f;
+  border-radius: 6px;
+  background: #091724;
+  color: #f4f8ff;
+  padding: 6px 8px;
+}
+
+.garage-ui input[type="color"] {
+  padding: 2px;
+}
+
+.ship-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.ship-row {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+  text-align: left;
+}
+
+.ship-row span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.ship-swatch {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d7e8ff;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.builder-panel {
+  min-width: 0;
+}
+
+.builder-block {
+  border-top: 1px solid #203954;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.builder-block h3 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.attribute-row {
+  display: grid;
+  grid-template-columns: 1fr 34px 34px 34px;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.attribute-row span {
+  align-self: center;
+  text-transform: capitalize;
+}
+
+.attribute-row strong {
+  align-self: center;
+  text-align: center;
+}
+
+.stats-line {
+  border-top: 1px solid #203954;
+  margin-top: 12px;
+  padding-top: 12px;
+  font-size: 13px;
+}
+
+.garage-ui button {
+  border: 1px solid #3a5c80;
+  border-radius: 6px;
+  background: #102234;
+  color: #e8f4ff;
+  min-height: 34px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.garage-ui button:hover:not(:disabled),
+.garage-ui button.active {
+  border-color: #62b3ff;
+  background: #173857;
+}
+
+.garage-ui button.primary {
+  border-color: #88d87f;
+  background: #173923;
+}
+
+.garage-ui button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+@media (max-width: 900px) {
+  .garage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .garage-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
