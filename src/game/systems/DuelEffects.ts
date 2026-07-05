@@ -50,4 +50,31 @@ export class DuelEffects {
       onComplete: () => pulse.destroy()
     });
   }
+
+  createMineExplosion(x: number, y: number, color: number, radius: number): void {
+    const ring = this.scene.add.circle(x, y, radius, color, 0.12);
+    ring.setStrokeStyle(3, color, 0.85);
+    ring.setDepth(32);
+    this.scene.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scale: 1.25,
+      duration: 260,
+      onComplete: () => ring.destroy()
+    });
+
+    for (let i = 0; i < 10; i += 1) {
+      const angle = (Math.PI * 2 * i) / 10;
+      const spark = this.scene.add.circle(x, y, 3, color, 0.9);
+      spark.setDepth(33);
+      this.scene.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * Phaser.Math.Between(24, radius),
+        y: y + Math.sin(angle) * Phaser.Math.Between(24, radius),
+        alpha: 0,
+        duration: 220,
+        onComplete: () => spark.destroy()
+      });
+    }
+  }
 }

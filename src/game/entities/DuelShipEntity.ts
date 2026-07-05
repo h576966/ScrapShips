@@ -1,7 +1,8 @@
 import Phaser from "phaser";
-import { getHullVisual } from "../data/hullPresets";
+import { getHullVisualByPreset, type HullVisual } from "../data/hullPresets";
+import { normalizeShipVisual } from "../data/shipVisualOptions";
 import type { PlayerId } from "../input/bindings";
-import type { ShipBuild } from "../model";
+import type { ShipBuild, ShipVisualCustomization } from "../model";
 import type { ShipStats } from "../services/ShipStatsCalculator";
 import type { PlayerInputState } from "../systems/InputSystem";
 import {
@@ -15,6 +16,7 @@ import {
   type PickupType,
   type ShipEffectState
 } from "../systems/PickupSystem";
+import { getForwardPoint } from "../systems/WeaponSystem";
 
 export type DuelShipOptions = {
   playerId: PlayerId;
@@ -37,12 +39,14 @@ export class DuelShipEntity {
   private readonly boostFlame: Phaser.GameObjects.Triangle;
   private readonly cockpit: Phaser.GameObjects.Polygon;
   private readonly stripe: Phaser.GameObjects.Polygon;
+  private readonly detailShapes: Phaser.GameObjects.Polygon[] = [];
   private readonly nameLabel: Phaser.GameObjects.Text;
   private readonly hpBarBack: Phaser.GameObjects.Rectangle;
   private readonly hpBar: Phaser.GameObjects.Rectangle;
   private readonly shieldBar: Phaser.GameObjects.Rectangle;
   private readonly primaryColor: number;
   private readonly secondaryColor: number;
+  private readonly accentColor: number;
   private readonly muzzleDistance: number;
   private readonly flameDistance: number;
   private readonly hudOffset: number;
@@ -63,9 +67,11 @@ export class DuelShipEntity {
     this.stats = options.stats;
     this.primaryColor = colorToNumber(options.build.colors.primary);
     this.secondaryColor = colorToNumber(options.build.colors.secondary);
+    const visualStyle = normalizeShipVisual(options.build.visual);
+    this.accentColor = colorToNumber(visualStyle.accentColor);
     this.hp = options.stats.maxHp;
     this.shield = options.stats.maxShield;
-    const visual = getHullVisual(options.build.hullShape);
+    const visual = getHullVisualByPreset(visualStyle.hullPreset);
     const visualScale = Phaser.Math.Clamp(
       0.78 + Math.sqrt(options.stats.hullPixelCount) / 10,
       0.92,
@@ -96,7 +102,7 @@ export class DuelShipEntity {
       options.spawn.x,
       options.spawn.y,
       scalePoints(visual.cockpit, visualScale),
-      this.secondaryColor,
+      this.accentColor,
       0.92
     );
     this.cockpit.setDepth(11);
@@ -105,10 +111,28 @@ export class DuelShipEntity {
       options.spawn.x,
       options.spawn.y,
       scalePoints(visual.stripe, visualScale),
-      this.secondaryColor,
+      this.accentColor,
       0.65
     );
     this.stripe.setDepth(11);
+
+    for (const detail of createStyleDetailPolygons(
+      visual,
+      visualScale,
+      visualStyle,
+      this.secondaryColor,
+      this.accentColor
+    )) {
+      const shape = scene.add.polygon(
+        options.spawn.x,
+        options.spawn.y,
+        detail.points,
+        detail.color,
+        detail.alpha
+      );
+      shape.setDepth(12);
+      this.detailShapes.push(shape);
+    }
 
     const body = this.body;
     body.setAllowGravity(false);
@@ -159,6 +183,9 @@ export class DuelShipEntity {
     this.shape.setActive(true).setVisible(true);
     this.cockpit.setVisible(true);
     this.stripe.setVisible(true);
+    for (const detail of this.detailShapes) {
+      detail.setVisible(true);
+    }
     this.boostFlame.setVisible(false);
     this.body.enable = true;
     this.body.reset(x, y);
@@ -261,11 +288,23 @@ export class DuelShipEntity {
   }
 
   getMuzzlePosition(): Phaser.Math.Vector2 {
-    const angle = this.getFacingAngle();
-    return new Phaser.Math.Vector2(
-      this.shape.x + Math.cos(angle) * this.muzzleDistance,
-      this.shape.y + Math.sin(angle) * this.muzzleDistance
-    );
+    const point = getForwardPoint({
+      originX: this.shape.x,
+      originY: this.shape.y,
+      angle: this.getFacingAngle(),
+      distance: this.muzzleDistance
+    });
+    return new Phaser.Math.Vector2(point.x, point.y);
+  }
+
+  getRearPosition(distance = this.flameDistance + 6): Phaser.Math.Vector2 {
+    const point = getForwardPoint({
+      originX: this.shape.x,
+      originY: this.shape.y,
+      angle: this.getFacingAngle(),
+      distance: -distance
+    });
+    return new Phaser.Math.Vector2(point.x, point.y);
   }
 
   getHitRadius(): number {
@@ -277,6 +316,9 @@ export class DuelShipEntity {
     this.boostFlame.destroy();
     this.cockpit.destroy();
     this.stripe.destroy();
+    for (const detail of this.detailShapes) {
+      detail.destroy();
+    }
     this.nameLabel.destroy();
     this.hpBarBack.destroy();
     this.hpBar.destroy();
@@ -334,6 +376,9 @@ export class DuelShipEntity {
     this.shape.setVisible(false);
     this.cockpit.setVisible(false);
     this.stripe.setVisible(false);
+    for (const detail of this.detailShapes) {
+      detail.setVisible(false);
+    }
     this.boostFlame.setVisible(false);
   }
 
@@ -361,6 +406,11 @@ export class DuelShipEntity {
     this.stripe.setPosition(this.shape.x, this.shape.y);
     this.stripe.setRotation(this.shape.rotation);
     this.stripe.setVisible(visible);
+    for (const detail of this.detailShapes) {
+      detail.setPosition(this.shape.x, this.shape.y);
+      detail.setRotation(this.shape.rotation);
+      detail.setVisible(visible);
+    }
   }
 
   private updateHud(): void {
@@ -393,4 +443,180 @@ function colorToNumber(color: string): number {
 
 function scalePoints(points: number[], scale: number): number[] {
   return points.map((value) => value * scale);
+}
+
+type StyleDetailPolygon = {
+  points: number[];
+  color: number;
+  alpha: number;
+};
+
+function createStyleDetailPolygons(
+  visual: HullVisual,
+  scale: number,
+  style: ShipVisualCustomization,
+  secondaryColor: number,
+  accentColor: number
+): StyleDetailPolygon[] {
+  const halfWidth = visual.bodyWidth / 2;
+  const noseY = -visual.bodyHeight / 2;
+  const tailY = visual.bodyHeight / 2;
+  const details: StyleDetailPolygon[] = [];
+
+  details.push(...createNoseDetails(style.noseStyle, noseY, accentColor));
+  details.push(...createWingDetails(style.wingStyle, halfWidth, secondaryColor));
+  details.push(...createEngineDetails(style.engineStyle, halfWidth, tailY, accentColor));
+
+  return details.map((detail) => ({
+    ...detail,
+    points: scalePoints(detail.points, scale)
+  }));
+}
+
+function createNoseDetails(
+  style: ShipVisualCustomization["noseStyle"],
+  noseY: number,
+  color: number
+): StyleDetailPolygon[] {
+  if (style === "blunt") {
+    return [
+      {
+        points: [-6, noseY + 5, 6, noseY + 5, 5, noseY + 12, -5, noseY + 12],
+        color,
+        alpha: 0.75
+      }
+    ];
+  }
+
+  if (style === "split") {
+    return [
+      {
+        points: [-2, noseY + 2, -10, noseY + 13, -2, noseY + 12],
+        color,
+        alpha: 0.8
+      },
+      {
+        points: [2, noseY + 2, 10, noseY + 13, 2, noseY + 12],
+        color,
+        alpha: 0.8
+      }
+    ];
+  }
+
+  return [
+    {
+      points: [0, noseY - 1, 5, noseY + 10, -5, noseY + 10],
+      color,
+      alpha: 0.72
+    }
+  ];
+}
+
+function createWingDetails(
+  style: ShipVisualCustomization["wingStyle"],
+  halfWidth: number,
+  color: number
+): StyleDetailPolygon[] {
+  if (style === "none") {
+    return [];
+  }
+
+  const reach = style === "swept_wings" ? 16 : 8;
+  const forwardY = style === "swept_wings" ? -4 : 4;
+  const backY = style === "swept_wings" ? 20 : 16;
+  const innerY = style === "swept_wings" ? 12 : 13;
+
+  return [
+    {
+      points: [
+        halfWidth * 0.48,
+        forwardY,
+        halfWidth + reach,
+        backY,
+        halfWidth * 0.2,
+        innerY
+      ],
+      color,
+      alpha: 0.68
+    },
+    {
+      points: [
+        -halfWidth * 0.48,
+        forwardY,
+        -halfWidth - reach,
+        backY,
+        -halfWidth * 0.2,
+        innerY
+      ],
+      color,
+      alpha: 0.68
+    }
+  ];
+}
+
+function createEngineDetails(
+  style: ShipVisualCustomization["engineStyle"],
+  halfWidth: number,
+  tailY: number,
+  color: number
+): StyleDetailPolygon[] {
+  if (style === "single") {
+    return [
+      {
+        points: [-5, tailY - 4, 5, tailY - 4, 6, tailY + 3, -6, tailY + 3],
+        color,
+        alpha: 0.75
+      }
+    ];
+  }
+
+  if (style === "wide") {
+    return [
+      {
+        points: [
+          -halfWidth * 0.68,
+          tailY - 4,
+          halfWidth * 0.68,
+          tailY - 4,
+          halfWidth * 0.58,
+          tailY + 3,
+          -halfWidth * 0.58,
+          tailY + 3
+        ],
+        color,
+        alpha: 0.72
+      }
+    ];
+  }
+
+  return [
+    {
+      points: [
+        -halfWidth * 0.46,
+        tailY - 4,
+        -halfWidth * 0.16,
+        tailY - 4,
+        -halfWidth * 0.12,
+        tailY + 3,
+        -halfWidth * 0.5,
+        tailY + 3
+      ],
+      color,
+      alpha: 0.75
+    },
+    {
+      points: [
+        halfWidth * 0.16,
+        tailY - 4,
+        halfWidth * 0.46,
+        tailY - 4,
+        halfWidth * 0.5,
+        tailY + 3,
+        halfWidth * 0.12,
+        tailY + 3
+      ],
+      color,
+      alpha: 0.75
+    }
+  ];
 }

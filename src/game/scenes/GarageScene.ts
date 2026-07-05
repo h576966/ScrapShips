@@ -8,21 +8,33 @@ import {
 import { ensureTwoPlayableProfiles } from "../data/defaultProfiles";
 import { GADGET_OPTIONS, isGadgetType } from "../data/gadgets";
 import {
+  ENGINE_STYLE_OPTIONS,
+  NOSE_STYLE_OPTIONS,
+  WING_STYLE_OPTIONS,
+  isEngineStyle,
+  isNoseStyle,
+  isWingStyle,
+  normalizeShipVisual
+} from "../data/shipVisualOptions";
+import {
   WEAPON_DEFINITIONS,
   getWeaponDefinition,
   isWeaponType
 } from "../data/weapons";
 import {
   HULL_PRESETS,
-  findHullPresetId,
-  type HullPresetId
+  findHullPresetId
 } from "../data/hullPresets";
 import type {
+  EngineStyle,
   GadgetType,
+  HullPresetId,
+  NoseStyle,
   PlayerProfile,
   ShipAttributes,
   ShipBuild,
-  WeaponType
+  WeaponType,
+  WingStyle
 } from "../model";
 import {
   canAddShip,
@@ -38,6 +50,7 @@ import {
   updateShipGadget,
   updateShipHullPreset,
   updateShipPrimaryWeapon,
+  updateShipVisual,
   validatePlayerProfile,
   type ProfileEditResult
 } from "../services/ProfileService";
@@ -217,6 +230,35 @@ export class GarageScene extends Phaser.Scene {
       if (primaryWeapon) {
         this.commit(updateShipPrimaryWeapon(profile, activeShip.id, primaryWeapon));
       }
+      return;
+    }
+
+    if (action === "accent-color") {
+      this.commit(updateShipVisual(profile, activeShip.id, { accentColor: target.value }));
+      return;
+    }
+
+    if (action === "nose-style") {
+      const noseStyle = toNoseStyle(target.value);
+      if (noseStyle) {
+        this.commit(updateShipVisual(profile, activeShip.id, { noseStyle }));
+      }
+      return;
+    }
+
+    if (action === "wing-style") {
+      const wingStyle = toWingStyle(target.value);
+      if (wingStyle) {
+        this.commit(updateShipVisual(profile, activeShip.id, { wingStyle }));
+      }
+      return;
+    }
+
+    if (action === "engine-style") {
+      const engineStyle = toEngineStyle(target.value);
+      if (engineStyle) {
+        this.commit(updateShipVisual(profile, activeShip.id, { engineStyle }));
+      }
     }
   };
 
@@ -322,7 +364,7 @@ export class GarageScene extends Phaser.Scene {
     const total = getAttributeTotal(ship.attributes);
     const remaining = ATTRIBUTE_TOTAL_MAX - total;
     const stats = calculateShipStats(ship);
-    const hullPresetId = findHullPresetId(ship.hullShape);
+    const visual = normalizeShipVisual(ship.visual, findHullPresetId(ship.hullShape));
     const weapon = getWeaponDefinition(ship.primaryWeapon);
 
     return `
@@ -343,6 +385,10 @@ export class GarageScene extends Phaser.Scene {
           <label class="field-label">
             Secondary
             <input type="color" data-action="secondary-color" value="${escapeHtml(ship.colors.secondary)}" />
+          </label>
+          <label class="field-label">
+            Accent
+            <input type="color" data-action="accent-color" value="${escapeHtml(visual.accentColor)}" />
           </label>
         </div>
         <div class="builder-block">
@@ -372,7 +418,10 @@ export class GarageScene extends Phaser.Scene {
           Gadget
           <select data-action="gadget">
             ${renderSelectOptions(
-              GADGET_OPTIONS.map((gadget) => ({ value: gadget, label: gadget })),
+              GADGET_OPTIONS.map((gadget) => ({
+                value: gadget.value,
+                label: gadget.label
+              })),
               ship.gadget ?? "none"
             )}
           </select>
@@ -383,11 +432,34 @@ export class GarageScene extends Phaser.Scene {
             ${HULL_PRESETS.map(
               (preset) => `
                 <button type="button" data-action="hull-preset" data-slot="${this.editingSlot}"
-                  data-preset="${preset.id}" class="${hullPresetId === preset.id ? "active" : ""}">
+                  data-preset="${preset.id}" class="${visual.hullPreset === preset.id ? "active" : ""}">
                   ${preset.label}
                 </button>
               `
             ).join("")}
+          </div>
+        </div>
+        <div class="builder-block">
+          <h3>Silhouette</h3>
+          <div class="visual-grid">
+            <label class="field-label">
+              Nose
+              <select data-action="nose-style">
+                ${renderSelectOptions(NOSE_STYLE_OPTIONS, visual.noseStyle)}
+              </select>
+            </label>
+            <label class="field-label">
+              Wings
+              <select data-action="wing-style">
+                ${renderSelectOptions(WING_STYLE_OPTIONS, visual.wingStyle)}
+              </select>
+            </label>
+            <label class="field-label">
+              Engine
+              <select data-action="engine-style">
+                ${renderSelectOptions(ENGINE_STYLE_OPTIONS, visual.engineStyle)}
+              </select>
+            </label>
           </div>
         </div>
         <div class="stats-line">
@@ -526,4 +598,16 @@ function toGadgetType(value: string | undefined): GadgetType | undefined {
 
 function toWeaponType(value: string | undefined): WeaponType | undefined {
   return isWeaponType(value) ? value : undefined;
+}
+
+function toNoseStyle(value: string | undefined): NoseStyle | undefined {
+  return isNoseStyle(value) ? value : undefined;
+}
+
+function toWingStyle(value: string | undefined): WingStyle | undefined {
+  return isWingStyle(value) ? value : undefined;
+}
+
+function toEngineStyle(value: string | undefined): EngineStyle | undefined {
+  return isEngineStyle(value) ? value : undefined;
 }

@@ -6,6 +6,7 @@ import {
 } from "../src/game/data/weapons";
 import {
   canFireWeapon,
+  getForwardPoint,
   getLaserDamage,
   isProjectileExpired,
   laserIntersectsCircle,
@@ -62,6 +63,25 @@ describe("WeaponSystem", () => {
         lifetimeMs: bolt.lifetimeMs
       })
     ).toBe(true);
+  });
+
+  it("spawns projectile origins on the ship forward centerline", () => {
+    const right = getForwardPoint({
+      originX: 100,
+      originY: 80,
+      angle: 0,
+      distance: 42
+    });
+    expect(right).toEqual({ x: 142, y: 80 });
+
+    const up = getForwardPoint({
+      originX: 100,
+      originY: 80,
+      angle: -Math.PI / 2,
+      distance: 42
+    });
+    expect(up.x).toBeCloseTo(100);
+    expect(up.y).toBeCloseTo(38);
   });
 
   it("handles cooldown and damage scaling", () => {

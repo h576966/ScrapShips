@@ -46,6 +46,24 @@ Choose player
 
 The ship-building loop is as important as the match itself.
 
+## Current implemented foundation
+
+The current playable prototype includes:
+
+- Main Menu -> Garage -> Duel.
+- Two local player profiles with selectable active ships.
+- LocalStorage save/load with safe migration for older ships.
+- Ship create, duplicate, rename, delete except last ship, and max 5 ships per profile.
+- Builder controls for colors, attributes, hull preset, primary weapon, gadget, and generated visual details.
+- Duel arena with a larger generated field, asteroids, pickups, HP/shield bars, hit feedback, and restart/garage shortcuts.
+- Primary weapons configured in `src/game/data/weapons.ts`:
+  - Laser: short-range continuous beam.
+  - Bolt Cannon: medium-range repeated projectile.
+  - Rail Shot: long-range precision projectile.
+- Proximity mines as a gadget with cooldown, arming delay, lifetime, active mine cap, and explosion feedback.
+
+Weapon projectile damage, cooldown, range, speed, and lifetime live in weapon definitions plus `WeaponSystem` scaling. `ShipStatsCalculator` is only responsible for derived movement, HP/shield, mass, and turbo stats.
+
 ## Player profiles
 
 Each player profile should contain:
@@ -86,6 +104,8 @@ export type ShipBuild = {
   };
   hullShape: HullShape;
   attributes: ShipAttributes;
+  primaryWeapon: WeaponType;
+  visual: ShipVisualCustomization;
   gadget?: GadgetType;
 };
 
@@ -103,11 +123,24 @@ export type HullShape = {
   pixels: Array<{ x: number; y: number }>;
 };
 
+export type WeaponType =
+  | "laser"
+  | "bolt_cannon"
+  | "rail_shot";
+
 export type GadgetType =
   | "none"
-  | "mine"
+  | "proximity_mine"
   | "repair_pulse"
   | "turbo_burst";
+
+export type ShipVisualCustomization = {
+  hullPreset: "scrapper" | "needle" | "bulwark" | "raider";
+  noseStyle: "sharp" | "blunt" | "split";
+  wingStyle: "none" | "small_fins" | "swept_wings";
+  engineStyle: "single" | "dual" | "wide";
+  accentColor: string;
+};
 ```
 
 ## Attribute budget
@@ -128,7 +161,7 @@ Initial attributes:
 | turning | rotation speed / handling |
 | hull | ship HP |
 | shield | shield HP / regeneration |
-| weapon | projectile damage / fire rate |
+| weapon | scales configured primary weapon damage / cooldown |
 | turbo | boost strength / boost recharge |
 
 Mass should not be directly assigned by the player. It should be derived from the hull shape.
@@ -175,13 +208,32 @@ Rules:
 
 Cloak is not required and should not be prioritized.
 
-Prefer first gadgets:
+Implemented/near-term gadgets:
 
-1. Mine
+1. Proximity mine
 2. Repair pulse
 3. Turbo burst
 
-Gadgets should be optional and simple. They should use the same sixth key as turbo/gadget if needed, or turbo should be the default special action before gadgets exist.
+Gadgets should be optional and simple. The same sixth key is used for turbo/gadget:
+
+- `turbo_burst` keeps the existing movement boost behavior.
+- `proximity_mine` places a mine behind the ship, then recharges slowly.
+- Mines arm after a short delay, trigger on enemy proximity, expire after a long lifetime, and are capped per player.
+- `repair_pulse` is reserved in the model but not yet implemented as an active combat ability.
+
+## Primary weapons
+
+Ships have one primary weapon selected in Garage.
+
+Current primary weapons:
+
+| Weapon | Role |
+|---|---|
+| Laser | short-range continuous beam, reliable up close |
+| Bolt Cannon | default medium-range projectile |
+| Rail Shot | long-range, fast, slower-cooldown projectile |
+
+Weapon definitions are config-driven. Keep range, damage, cooldown, projectile speed, lifetime, and visual style in `src/game/data/weapons.ts`; use pure helpers in `WeaponSystem` for scaling, cooldown checks, projectile expiration, beam hit checks, and centerline spawn math.
 
 ## Controls
 
@@ -219,8 +271,13 @@ First technical target.
 Rules:
 
 - Two ships spawn on opposite sides.
-- Shared arena, no split screen.
+- Shared larger arena, no split screen.
+- Static zoomed-out camera keeps both ships visible.
+- UI text is fixed to the screen/camera rather than world coordinates.
 - Ships can thrust, turn, brake, shoot, collide, take damage, and die.
+- Projectile weapons spawn from the ship nose/centerline.
+- Laser starts from the ship nose/centerline.
+- Asteroids spawn across the arena and avoid starting too close to ships.
 - Winner is the last ship alive.
 - Round reset after win.
 
@@ -270,12 +327,16 @@ Keep visuals simple:
 - readable ships
 - clear colored outlines per player
 - dark space background
+- layered star background with subtle drift
 - visible projectiles
+- visible mines and explosion rings
 - visible shield/HP bars
 - visible base repair radius
 - simple explosion/hit effects
 
 The first version can use simple generated rectangles/polygons before real art.
+
+Current ship visuals are generated polygons. Hull presets affect hull pixels/mass and silhouette. Nose, wing, engine, and accent color options are cosmetic for now and should remain lightweight unless there is a clear gameplay reason to make them mechanical.
 
 ## Recommended repo structure
 
@@ -284,39 +345,38 @@ src/
   main.ts
   game/
     scenes/
-      BootScene.ts
       MainMenuScene.ts
-      InputTestScene.ts
       GarageScene.ts
-      ShipBuilderScene.ts
       DuelScene.ts
-      BaseAssaultScene.ts
     entities/
-      Ship.ts
+      DuelShipEntity.ts
       Projectile.ts
-      Base.ts
-      Drone.ts
-      Mine.ts
+      MineEntity.ts
+      AsteroidEntity.ts
+      PickupEntity.ts
     systems/
       InputSystem.ts
-      MovementSystem.ts
-      CombatSystem.ts
-      CollisionDamageSystem.ts
-      RammingSystem.ts
-      GadgetSystem.ts
-      BaseSystem.ts
+      DuelCombatSystem.ts
+      ArenaObjectSystem.ts
+      DuelEffects.ts
+      WeaponSystem.ts
+      MineSystem.ts
+      PickupSystem.ts
+      SpaceBackground.ts
     model/
       PlayerProfile.ts
       ShipBuild.ts
-      ShipAttributes.ts
-      HullShape.ts
-      GameMode.ts
     services/
       SaveService.ts
       ProfileService.ts
       ShipStatsCalculator.ts
       ShipValidator.ts
     data/
+      weapons.ts
+      gadgets.ts
+      hullPresets.ts
+      shipVisualOptions.ts
+      arenaObjects.ts
       defaultProfiles.ts
       defaultShips.ts
       balance.ts
@@ -324,7 +384,10 @@ tests/
   ProfileService.test.ts
   ShipValidator.test.ts
   ShipStatsCalculator.test.ts
-  RammingSystem.test.ts
+  SaveService.test.ts
+  WeaponSystem.test.ts
+  MineSystem.test.ts
+  ArenaObjects.test.ts
 ```
 
 ## First success definition

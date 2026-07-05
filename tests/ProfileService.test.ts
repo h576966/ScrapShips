@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { PlayerProfile, ShipBuild } from "../src/game/model";
 import {
   createShip,
@@ -9,6 +10,7 @@ import {
   updateShipAttributes,
   updateShipColors,
   updateShipPrimaryWeapon,
+  updateShipVisual,
   validatePlayerProfile
 } from "../src/game/services/ProfileService";
 
@@ -179,6 +181,25 @@ describe("ProfileService", () => {
     expect(result.ok).toBe(true);
     expect(result.profile.ships[0].primaryWeapon).toBe("rail_shot");
   });
+
+  it("updates generated visual customization", () => {
+    const profile = makeProfile();
+
+    const result = updateShipVisual(profile, "ship-1", {
+      noseStyle: "split",
+      wingStyle: "swept_wings",
+      engineStyle: "wide",
+      accentColor: "#ffd166"
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.profile.ships[0].visual).toMatchObject({
+      noseStyle: "split",
+      wingStyle: "swept_wings",
+      engineStyle: "wide",
+      accentColor: "#ffd166"
+    });
+  });
 });
 
 function makeProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
@@ -219,6 +240,7 @@ function makeShip(id: string): ShipBuild {
       turbo: 5
     },
     primaryWeapon: "bolt_cannon",
+    visual: DEFAULT_SHIP_VISUAL,
     gadget: "turbo_burst"
   };
 }

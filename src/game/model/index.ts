@@ -1,9 +1,14 @@
 export type { PlayerProfile } from "./PlayerProfile";
 export type {
   GadgetType,
+  EngineStyle,
   HullPixel,
+  HullPresetId,
   HullShape,
+  NoseStyle,
   ShipAttributes,
   ShipBuild,
-  WeaponType
+  ShipVisualCustomization,
+  WeaponType,
+  WingStyle
 } from "./ShipBuild";

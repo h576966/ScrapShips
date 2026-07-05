@@ -1,12 +1,14 @@
 import { MAX_SHIPS_PER_PROFILE } from "../data/balance";
 import { getHullPreset } from "../data/hullPresets";
-import type { HullPresetId } from "../data/hullPresets";
+import { normalizeShipVisual } from "../data/shipVisualOptions";
 import type {
   GadgetType,
+  HullPresetId,
   HullShape,
   PlayerProfile,
   ShipAttributes,
   ShipBuild,
+  ShipVisualCustomization,
   WeaponType
 } from "../model";
 import { validateShipBuild, type ValidationResult } from "./ShipValidator";
@@ -227,7 +229,28 @@ export function updateShipHullPreset(
   shipId: string,
   presetId: HullPresetId
 ): ProfileEditResult {
-  return updateShipHullShape(profile, shipId, getHullPreset(presetId));
+  return updateShip(profile, shipId, (ship) => ({
+    ...ship,
+    hullShape: getHullPreset(presetId),
+    visual: {
+      ...normalizeShipVisual(ship.visual),
+      hullPreset: presetId
+    }
+  }));
+}
+
+export function updateShipVisual(
+  profile: PlayerProfile,
+  shipId: string,
+  visual: Partial<ShipVisualCustomization>
+): ProfileEditResult {
+  return updateShip(profile, shipId, (ship) => ({
+    ...ship,
+    visual: {
+      ...normalizeShipVisual(ship.visual),
+      ...visual
+    }
+  }));
 }
 
 function updateShip(

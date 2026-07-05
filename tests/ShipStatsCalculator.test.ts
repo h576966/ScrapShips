@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { HullShape, ShipBuild } from "../src/game/model";
 import { calculateShipStats } from "../src/game/services/ShipStatsCalculator";
 
@@ -16,6 +17,14 @@ describe("ShipStatsCalculator", () => {
 
     expect(large.maxSpeed).toBeLessThan(small.maxSpeed);
     expect(large.turnRate).toBeLessThan(small.turnRate);
+  });
+
+  it("keeps weapon projectile tuning in weapon definitions instead of ship stats", () => {
+    const stats = calculateShipStats(makeShip(12));
+
+    expect(stats).not.toHaveProperty("projectileDamage");
+    expect(stats).not.toHaveProperty("projectileSpeed");
+    expect(stats).not.toHaveProperty("fireCooldownMs");
   });
 });
 
@@ -36,7 +45,8 @@ function makeShip(pixelCount: number): ShipBuild {
       weapon: 5,
       turbo: 5
     },
-    primaryWeapon: "bolt_cannon"
+    primaryWeapon: "bolt_cannon",
+    visual: DEFAULT_SHIP_VISUAL
   };
 }
 

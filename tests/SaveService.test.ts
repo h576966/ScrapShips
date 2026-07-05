@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { PlayerProfile } from "../src/game/model";
 import { loadProfiles, saveProfiles } from "../src/game/services/SaveService";
 
@@ -41,6 +42,37 @@ describe("SaveService", () => {
     const loaded = loadProfiles(storage);
 
     expect(loaded?.[0].ships[0].primaryWeapon).toBe("bolt_cannon");
+  });
+
+  it("migrates legacy ships to default generated visual fields", () => {
+    const storage = makeStorage();
+    const profile = makeProfile("profile-1");
+    const legacyProfile = {
+      ...profile,
+      ships: profile.ships.map(({ visual: _visual, ...ship }) => ship)
+    };
+    storage.setItem("scrapships.profiles.v1", JSON.stringify([legacyProfile]));
+
+    const loaded = loadProfiles(storage);
+
+    expect(loaded?.[0].ships[0].visual).toEqual(DEFAULT_SHIP_VISUAL);
+  });
+
+  it("migrates old mine gadgets to proximity mines", () => {
+    const storage = makeStorage();
+    const profile = makeProfile("profile-1");
+    const legacyProfile = {
+      ...profile,
+      ships: profile.ships.map((ship) => ({
+        ...ship,
+        gadget: "mine"
+      }))
+    };
+    storage.setItem("scrapships.profiles.v1", JSON.stringify([legacyProfile]));
+
+    const loaded = loadProfiles(storage);
+
+    expect(loaded?.[0].ships[0].gadget).toBe("proximity_mine");
   });
 
   it("persists selected weapon and renamed profile", () => {
@@ -133,6 +165,7 @@ function makeProfile(id: string): PlayerProfile {
           turbo: 5
         },
         primaryWeapon: "bolt_cannon",
+        visual: DEFAULT_SHIP_VISUAL,
         gadget: "turbo_burst"
       }
     ]

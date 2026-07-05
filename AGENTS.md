@@ -17,7 +17,7 @@ Primary goals:
 Use:
 
 - TypeScript
-- Phaser 3
+- Phaser
 - Vite
 - Vitest for non-Phaser gameplay/model tests
 - Browser localStorage for local save data
@@ -37,7 +37,8 @@ Good candidates for plain TypeScript:
 - ship validation
 - ship stat calculation
 - movement stat derivation
-- ramming damage calculation
+- ramming/collision damage calculation
+- weapon scaling, projectile expiration, mine timing, and geometric hit checks
 - save/load serialization
 - game mode state rules
 
@@ -114,7 +115,9 @@ Initial attributes:
 Total attribute budget: 30 points.
 Suggested max per attribute: 10.
 
-Hull shape should affect mass and hitbox. Initially, it should not deeply affect gameplay beyond mass/hitbox.
+Hull preset should affect mass and hitbox. Nose, wing, engine, and accent options are cosmetic for now.
+
+Primary weapon behavior is config-driven in `src/game/data/weapons.ts`; do not duplicate projectile damage, speed, or cooldown fields in derived ship stats.
 
 Do not introduce fixed ship classes like "Rammer", "Tank", or "Scout" as hard classes. Strategies should emerge from combinations of attributes, mass, hull shape, turbo, and weapons.
 

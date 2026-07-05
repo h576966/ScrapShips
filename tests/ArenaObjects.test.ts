@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  VIEWPORT_HEIGHT,
+  VIEWPORT_WIDTH
+} from "../src/game/data/balance";
+import {
   ASTEROID_COLLISION_COOLDOWN_MS,
   ASTEROID_DEFINITIONS,
   ASTEROID_SPAWN_COUNT,
@@ -20,6 +26,13 @@ import {
 } from "../src/game/systems/PickupSystem";
 
 describe("arena objects", () => {
+  it("uses a duel arena larger than the viewport", () => {
+    expect(ARENA_WIDTH).toBeGreaterThan(VIEWPORT_WIDTH);
+    expect(ARENA_HEIGHT).toBeGreaterThan(VIEWPORT_HEIGHT);
+    expect(ARENA_WIDTH).toBeGreaterThanOrEqual(2000);
+    expect(ARENA_HEIGHT).toBeGreaterThanOrEqual(1200);
+  });
+
   it("defines valid asteroid configs", () => {
     expect(ASTEROID_SPAWN_COUNT.min).toBeGreaterThanOrEqual(5);
     expect(ASTEROID_SPAWN_COUNT.max).toBeLessThanOrEqual(8);

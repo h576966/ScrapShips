@@ -8,9 +8,6 @@ export type ShipStats = {
   acceleration: number;
   maxSpeed: number;
   turnRate: number;
-  projectileDamage: number;
-  projectileSpeed: number;
-  fireCooldownMs: number;
   turboAcceleration: number;
   turboMaxSpeed: number;
 };
@@ -34,9 +31,6 @@ export function calculateShipStats(ship: ShipBuild): ShipStats {
     acceleration,
     maxSpeed,
     turnRate,
-    projectileDamage: round(8 + attributes.weapon * 3),
-    projectileSpeed: round(380 + attributes.weapon * 9),
-    fireCooldownMs: Math.max(180, 520 - attributes.weapon * 30),
     turboAcceleration: round((220 + attributes.turbo * 34) / speedPenalty),
     turboMaxSpeed: round(maxSpeed + (65 + attributes.turbo * 12) / speedPenalty)
   };

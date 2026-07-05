@@ -1,10 +1,15 @@
 import type { PlayerProfile, ShipBuild } from "../model";
+import { migrateGadgetType } from "../data/gadgets";
+import { findHullPresetId } from "../data/hullPresets";
+import { normalizeShipVisual } from "../data/shipVisualOptions";
 import { DEFAULT_PRIMARY_WEAPON, isWeaponType } from "../data/weapons";
 import { validatePlayerProfile } from "./ProfileService";
 
 const STORAGE_KEY = "scrapships.profiles.v1";
 type SavedShipCandidate = Partial<Omit<ShipBuild, "primaryWeapon">> & {
   primaryWeapon?: unknown;
+  gadget?: unknown;
+  visual?: unknown;
 };
 type SavedProfileCandidate = Partial<Omit<PlayerProfile, "ships">> & {
   ships?: SavedShipCandidate[];
@@ -66,10 +71,24 @@ function migrateProfiles(profiles: SavedProfileCandidate[]): PlayerProfile[] {
 }
 
 function migrateShip(ship: SavedShipCandidate): SavedShipCandidate {
+  const fallbackHullPreset =
+    ship.hullShape && typeof ship.hullShape === "object"
+      ? findHullPresetId(ship.hullShape)
+      : undefined;
+
   return {
     ...ship,
     primaryWeapon: isWeaponType(ship.primaryWeapon)
       ? ship.primaryWeapon
-      : DEFAULT_PRIMARY_WEAPON
+      : DEFAULT_PRIMARY_WEAPON,
+    gadget: migrateGadgetType(ship.gadget),
+    visual: normalizeShipVisual(
+      isObjectRecord(ship.visual) ? ship.visual : undefined,
+      fallbackHullPreset
+    )
   };
+}
+
+function isObjectRecord(value: unknown): value is Partial<ShipBuild["visual"]> {
+  return typeof value === "object" && value !== null;
 }

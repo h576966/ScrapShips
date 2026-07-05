@@ -31,6 +31,20 @@ export type SegmentCircleHitInput = {
   targetRadius: number;
 };
 
+export type ForwardPointInput = {
+  originX: number;
+  originY: number;
+  angle: number;
+  distance: number;
+};
+
+export function getForwardPoint(input: ForwardPointInput): { x: number; y: number } {
+  return {
+    x: input.originX + Math.cos(input.angle) * input.distance,
+    y: input.originY + Math.sin(input.angle) * input.distance
+  };
+}
+
 export function scaleWeaponDamage(
   weapon: WeaponDefinition,
   weaponAttribute: number

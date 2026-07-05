@@ -192,6 +192,12 @@ canvas {
   text-align: center;
 }
 
+.visual-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .stats-line {
   border-top: 1px solid #203954;
   margin-top: 12px;
@@ -237,6 +243,10 @@ canvas {
 
 @media (max-width: 900px) {
   .garage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .visual-grid {
     grid-template-columns: 1fr;
   }
 

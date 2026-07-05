@@ -1,5 +1,10 @@
 import Phaser from "phaser";
-import { ARENA_HEIGHT, ARENA_WIDTH } from "../data/balance";
+import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  VIEWPORT_HEIGHT,
+  VIEWPORT_WIDTH
+} from "../data/balance";
 import { ensureTwoPlayableProfiles } from "../data/defaultProfiles";
 import { getWeaponDefinition } from "../data/weapons";
 import { DuelShipEntity } from "../entities/DuelShipEntity";
@@ -17,6 +22,7 @@ import { calculateShipStats } from "../services/ShipStatsCalculator";
 import { ArenaObjectSystem } from "../systems/ArenaObjectSystem";
 import { DuelCombatSystem } from "../systems/DuelCombatSystem";
 import { DuelEffects } from "../systems/DuelEffects";
+import { SpaceBackground } from "../systems/SpaceBackground";
 import {
   PLAYER_IDS,
   type DuelDebugApi,
@@ -41,6 +47,7 @@ declare global {
 export class DuelScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private effects!: DuelEffects;
+  private background!: SpaceBackground;
   private arena!: ArenaObjectSystem;
   private combat!: DuelCombatSystem;
   private ships!: ShipMap;
@@ -49,6 +56,7 @@ export class DuelScene extends Phaser.Scene {
   private duelData: DuelSceneData = {};
   private roundOver = false;
   private lastShipCollisionAt = 0;
+  private previousGadgetPressed: Record<PlayerId, boolean> = { p1: false, p2: false };
 
   private readonly onSystemKeyDown = (event: KeyboardEvent) => {
     if (matchesAnyBinding(event, SYSTEM_BINDINGS.restartRound)) {
@@ -68,7 +76,8 @@ export class DuelScene extends Phaser.Scene {
 
   create(): void {
     this.physics.world.setBounds(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
-    this.createBackground();
+    this.configureCamera();
+    this.background = new SpaceBackground(this);
 
     const loadedProfiles = loadProfiles();
     const profiles = ensureTwoPlayableProfiles(loadedProfiles);
@@ -83,12 +92,12 @@ export class DuelScene extends Phaser.Scene {
     this.effects = new DuelEffects(this);
     this.ships = {
       p1: this.createShipEntity("p1", playerOne, {
-        x: 220,
+        x: 320,
         y: ARENA_HEIGHT / 2,
         rotation: Math.PI / 2
       }),
       p2: this.createShipEntity("p2", playerTwo, {
-        x: ARENA_WIDTH - 220,
+        x: ARENA_WIDTH - 320,
         y: ARENA_HEIGHT / 2,
         rotation: -Math.PI / 2
       })
@@ -113,13 +122,27 @@ export class DuelScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.background.update(delta);
     this.arena.update(time);
     this.combat.update(time, delta);
 
     for (const playerId of PLAYER_IDS) {
       const ship = this.ships[playerId];
       const input = this.inputSystem.getPlayerState(playerId);
-      ship.update(delta, input, !this.roundOver, time);
+      const gadgetPressed = input.turbo;
+      if (
+        !this.roundOver &&
+        ship.alive &&
+        gadgetPressed &&
+        !this.previousGadgetPressed[playerId]
+      ) {
+        this.combat.tryUseGadget(ship, time);
+      }
+      this.previousGadgetPressed[playerId] = gadgetPressed;
+
+      const movementInput =
+        ship.build.gadget === "turbo_burst" ? input : { ...input, turbo: false };
+      ship.update(delta, movementInput, !this.roundOver, time);
 
       if (!this.roundOver && input.fire) {
         this.combat.firePrimaryWeapon(ship, time, delta);
@@ -141,36 +164,20 @@ export class DuelScene extends Phaser.Scene {
   ): DuelShipEntity {
     return new DuelShipEntity(this, {
       playerId,
-      label: `${selection.profile.name}: ${selection.ship.name}\n${getWeaponDefinition(selection.ship.primaryWeapon).label} | ${selection.ship.gadget ?? "none"}`,
+      label:
+        `${selection.profile.name}: ${selection.ship.name}\n` +
+        `${getWeaponDefinition(selection.ship.primaryWeapon).label} | ${selection.ship.gadget ?? "none"}`,
       build: selection.ship,
       stats: calculateShipStats(selection.ship),
       spawn
     });
   }
 
-  private createBackground(): void {
-    this.add.rectangle(
-      ARENA_WIDTH / 2,
-      ARENA_HEIGHT / 2,
-      ARENA_WIDTH,
-      ARENA_HEIGHT,
-      0x07111c
-    );
-
-    for (let i = 0; i < 90; i += 1) {
-      const x = Phaser.Math.Between(8, ARENA_WIDTH - 8);
-      const y = Phaser.Math.Between(8, ARENA_HEIGHT - 8);
-      const alpha = Phaser.Math.FloatBetween(0.25, 0.9);
-      this.add.circle(x, y, Phaser.Math.Between(1, 2), 0xffffff, alpha);
-    }
-
-    const border = this.add.rectangle(
-      ARENA_WIDTH / 2,
-      ARENA_HEIGHT / 2,
-      ARENA_WIDTH - 24,
-      ARENA_HEIGHT - 24
-    );
-    border.setStrokeStyle(2, 0x1a3654, 0.9);
+  private configureCamera(): void {
+    const zoom = getDuelCameraZoom();
+    this.cameras.main.setBounds(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    this.cameras.main.setZoom(zoom);
+    this.cameras.main.centerOn(ARENA_WIDTH / 2, ARENA_HEIGHT / 2);
   }
 
   private createHud(): void {
@@ -180,14 +187,14 @@ export class DuelScene extends Phaser.Scene {
       `P1 ${bindingLabels(p1.rotateLeft)}/${bindingLabels(p1.thrust)}/${bindingLabels(p1.rotateRight)} move, ${bindingLabels(p1.fire)} fire, ${bindingLabels(p1.brake)} brake, ${bindingLabels(p1.turbo)} turbo\n` +
       `P2 ${bindingLabels(p2.rotateLeft)}/${bindingLabels(p2.thrust)}/${bindingLabels(p2.rotateRight)} move, ${bindingLabels(p2.fire)} fire, ${bindingLabels(p2.brake)} brake, ${bindingLabels(p2.turbo)} turbo | R restart | G garage`;
 
-    this.add.text(18, 16, controls, {
+    this.createFixedText(18, 16, controls, {
       fontFamily: "monospace",
       fontSize: "14px",
       color: "#dbeaff",
       lineSpacing: 4
     });
 
-    this.messageText = this.add.text(ARENA_WIDTH / 2, 86, "", {
+    this.messageText = this.createFixedText(VIEWPORT_WIDTH / 2, 86, "", {
       fontFamily: "monospace",
       fontSize: "28px",
       color: "#ffffff",
@@ -198,7 +205,7 @@ export class DuelScene extends Phaser.Scene {
     this.messageText.setDepth(40);
     this.messageText.setVisible(false);
 
-    this.debugText = this.add.text(18, ARENA_HEIGHT - 54, "", {
+    this.debugText = this.createFixedText(18, VIEWPORT_HEIGHT - 58, "", {
       fontFamily: "monospace",
       fontSize: "12px",
       color: "#9fb6d0"
@@ -258,13 +265,32 @@ export class DuelScene extends Phaser.Scene {
     this.lastShipCollisionAt = 0;
     this.messageText.setVisible(false);
     this.combat.reset();
-    this.ships.p1.reset(220, ARENA_HEIGHT / 2, Math.PI / 2);
-    this.ships.p2.reset(ARENA_WIDTH - 220, ARENA_HEIGHT / 2, -Math.PI / 2);
+    this.previousGadgetPressed = { p1: false, p2: false };
+    this.ships.p1.reset(320, ARENA_HEIGHT / 2, Math.PI / 2);
+    this.ships.p2.reset(ARENA_WIDTH - 320, ARENA_HEIGHT / 2, -Math.PI / 2);
     this.arena.reset();
   }
 
   private updateDebugText(): void {
-    this.debugText.setText(this.inputSystem.getDebugLines().join("\n"));
+    this.debugText.setText(
+      [
+        ...this.inputSystem.getDebugLines(),
+        ...this.combat.getGadgetStatusLines(this.time.now)
+      ].join("\n")
+    );
+  }
+
+  private createFixedText(
+    screenX: number,
+    screenY: number,
+    text: string,
+    style: Phaser.Types.GameObjects.Text.TextStyle
+  ): Phaser.GameObjects.Text {
+    const zoom = getDuelCameraZoom();
+    return this.add
+      .text(screenX / zoom, screenY / zoom, text, style)
+      .setScrollFactor(0)
+      .setScale(1 / zoom);
   }
 
   private resolveDuelSlot(
@@ -290,6 +316,7 @@ export class DuelScene extends Phaser.Scene {
     this.input.keyboard?.off("keydown", this.onSystemKeyDown);
     this.combat.destroy();
     this.arena.destroy();
+    this.background.destroy();
     if (import.meta.env.DEV) {
       delete window.__scrapshipsDuelDebug;
     }
@@ -303,12 +330,14 @@ export class DuelScene extends Phaser.Scene {
     window.__scrapshipsDuelDebug = {
       getSnapshot: () => ({
         projectileCount: this.combat.projectileCount,
+        mineCount: this.combat.mineCount,
         asteroidCount: this.arena.asteroidCount,
         pickupCount: this.arena.pickupCount,
         roundOver: this.roundOver,
         p1: this.getShipDebugSnapshot("p1"),
         p2: this.getShipDebugSnapshot("p2"),
         projectiles: this.combat.getProjectileSnapshots(),
+        mines: this.combat.getMineSnapshots(this.time.now),
         asteroids: this.arena.getAsteroidSnapshots(),
         pickups: this.arena.getPickupSnapshots()
       }),
@@ -324,6 +353,10 @@ export class DuelScene extends Phaser.Scene {
       setShipWeapon: (playerId, weapon) => {
         this.combat.setShipWeapon(playerId, weapon);
       },
+      setShipGadget: (playerId, gadget) => {
+        this.combat.setShipGadget(playerId, gadget);
+      },
+      placeMine: (playerId) => this.combat.placeMineForPlayer(playerId, this.time.now),
       damageShip: (playerId, amount) => {
         this.ships[playerId].takeDamage(amount, this.time.now);
       },
@@ -357,4 +390,8 @@ export class DuelScene extends Phaser.Scene {
       ...ship.getEffectSnapshot(this.time.now)
     };
   }
+}
+
+function getDuelCameraZoom(): number {
+  return Math.min(VIEWPORT_WIDTH / ARENA_WIDTH, VIEWPORT_HEIGHT / ARENA_HEIGHT);
 }

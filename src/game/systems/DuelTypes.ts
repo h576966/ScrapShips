@@ -1,6 +1,7 @@
 import type { WeaponType } from "../data/weapons";
 import type { DuelShipEntity } from "../entities/DuelShipEntity";
 import type { PlayerId } from "../input/bindings";
+import type { GadgetType } from "../model";
 import type { PickupType } from "./PickupSystem";
 
 export const PLAYER_IDS = ["p1", "p2"] as const satisfies readonly PlayerId[];
@@ -42,14 +43,23 @@ export type PickupDebugSnapshot = {
   y: number;
 };
 
+export type MineDebugSnapshot = {
+  ownerId: PlayerId;
+  x: number;
+  y: number;
+  armed: boolean;
+};
+
 export type DuelDebugSnapshot = {
   projectileCount: number;
+  mineCount: number;
   asteroidCount: number;
   pickupCount: number;
   roundOver: boolean;
   p1: ShipDebugSnapshot;
   p2: ShipDebugSnapshot;
   projectiles: ProjectileDebugSnapshot[];
+  mines: MineDebugSnapshot[];
   asteroids: AsteroidDebugSnapshot[];
   pickups: PickupDebugSnapshot[];
 };
@@ -59,6 +69,8 @@ export type DuelDebugApi = {
   setShipPose: (playerId: PlayerId, x: number, y: number, rotation: number) => void;
   setShipVelocity: (playerId: PlayerId, x: number, y: number) => void;
   setShipWeapon: (playerId: PlayerId, weapon: WeaponType) => void;
+  setShipGadget: (playerId: PlayerId, gadget: GadgetType) => void;
+  placeMine: (playerId: PlayerId) => boolean;
   damageShip: (playerId: PlayerId, amount: number) => void;
   setAsteroidPose: (id: string, x: number, y: number) => void;
   setAsteroidHp: (id: string, hp: number) => void;

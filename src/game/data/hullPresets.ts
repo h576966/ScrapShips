@@ -1,6 +1,4 @@
-import type { HullShape } from "../model";
-
-export type HullPresetId = "scrapper" | "needle" | "bulwark" | "raider";
+import type { HullPresetId, HullShape } from "../model";
 
 export type HullPreset = {
   id: HullPresetId;
@@ -85,6 +83,10 @@ export function getHullVisual(hullShape: HullShape): HullVisual {
     HULL_PRESETS.find((preset) => preset.id === findHullPresetId(hullShape))?.visual ??
     HULL_PRESETS[0].visual
   );
+}
+
+export function getHullVisualByPreset(id: HullPresetId): HullVisual {
+  return HULL_PRESETS.find((preset) => preset.id === id)?.visual ?? HULL_PRESETS[0].visual;
 }
 
 export function makeScrapperHull(): HullShape {

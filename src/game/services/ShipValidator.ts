@@ -6,6 +6,12 @@ import {
   SHIP_ATTRIBUTE_KEYS
 } from "../data/balance";
 import { isGadgetType } from "../data/gadgets";
+import {
+  isEngineStyle,
+  isHullPresetId,
+  isNoseStyle,
+  isWingStyle
+} from "../data/shipVisualOptions";
 import { isWeaponType } from "../data/weapons";
 import type { HullShape, ShipAttributes, ShipBuild } from "../model";
 
@@ -100,6 +106,27 @@ export function validateShipBuild(ship: ShipBuild): ValidationResult {
 
   if (!HEX_COLOR_PATTERN.test(ship.colors.secondary)) {
     errors.push("secondary color must be a 6-digit hex color");
+  }
+
+  const visual = ship.visual as Partial<ShipBuild["visual"]> | undefined;
+  if (!visual) {
+    errors.push("ship visual customization is required");
+  } else {
+    if (!isHullPresetId(visual.hullPreset)) {
+      errors.push("hull preset is not supported");
+    }
+    if (!isNoseStyle(visual.noseStyle)) {
+      errors.push("nose style is not supported");
+    }
+    if (!isWingStyle(visual.wingStyle)) {
+      errors.push("wing style is not supported");
+    }
+    if (!isEngineStyle(visual.engineStyle)) {
+      errors.push("engine style is not supported");
+    }
+    if (!HEX_COLOR_PATTERN.test(visual.accentColor ?? "")) {
+      errors.push("accent color must be a 6-digit hex color");
+    }
   }
 
   const attributes = validateAttributes(ship.attributes);

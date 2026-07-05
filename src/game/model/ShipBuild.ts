@@ -17,9 +17,25 @@ export type HullShape = {
   pixels: HullPixel[];
 };
 
-export type GadgetType = "none" | "mine" | "repair_pulse" | "turbo_burst";
+export type GadgetType = "none" | "proximity_mine" | "repair_pulse" | "turbo_burst";
 
 export type WeaponType = "laser" | "bolt_cannon" | "rail_shot";
+
+export type HullPresetId = "scrapper" | "needle" | "bulwark" | "raider";
+
+export type NoseStyle = "sharp" | "blunt" | "split";
+
+export type WingStyle = "none" | "small_fins" | "swept_wings";
+
+export type EngineStyle = "single" | "dual" | "wide";
+
+export type ShipVisualCustomization = {
+  hullPreset: HullPresetId;
+  noseStyle: NoseStyle;
+  wingStyle: WingStyle;
+  engineStyle: EngineStyle;
+  accentColor: string;
+};
 
 export type ShipBuild = {
   id: string;
@@ -31,5 +47,6 @@ export type ShipBuild = {
   hullShape: HullShape;
   attributes: ShipAttributes;
   primaryWeapon: WeaponType;
+  visual: ShipVisualCustomization;
   gadget?: GadgetType;
 };

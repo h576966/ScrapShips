@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import "./style.css";
+import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "./game/data/balance";
 import { GarageScene } from "./game/scenes/GarageScene";
 import { MainMenuScene } from "./game/scenes/MainMenuScene";
 import { DuelScene } from "./game/scenes/DuelScene";
@@ -7,8 +8,8 @@ import { DuelScene } from "./game/scenes/DuelScene";
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.CANVAS,
   parent: "game-root",
-  width: 1024,
-  height: 640,
+  width: VIEWPORT_WIDTH,
+  height: VIEWPORT_HEIGHT,
   backgroundColor: "#07111c",
   physics: {
     default: "arcade",

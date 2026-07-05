@@ -1,5 +1,6 @@
 import type { ShipBuild } from "../model";
 import { makeArrowHull, makeDiamondHull } from "./hullPresets";
+import { DEFAULT_SHIP_VISUAL } from "./shipVisualOptions";
 
 export const defaultShipOne: ShipBuild = {
   id: "p1-scrapper",
@@ -16,6 +17,14 @@ export const defaultShipOne: ShipBuild = {
     shield: 4,
     weapon: 6,
     turbo: 5
+  },
+  visual: {
+    ...DEFAULT_SHIP_VISUAL,
+    hullPreset: "scrapper",
+    noseStyle: "sharp",
+    wingStyle: "small_fins",
+    engineStyle: "dual",
+    accentColor: "#ffe08a"
   },
   primaryWeapon: "bolt_cannon",
   gadget: "turbo_burst"
@@ -36,6 +45,14 @@ export const defaultShipTwo: ShipBuild = {
     shield: 4,
     weapon: 6,
     turbo: 5
+  },
+  visual: {
+    ...DEFAULT_SHIP_VISUAL,
+    hullPreset: "raider",
+    noseStyle: "split",
+    wingStyle: "swept_wings",
+    engineStyle: "wide",
+    accentColor: "#ffd166"
   },
   primaryWeapon: "bolt_cannon",
   gadget: "turbo_burst"

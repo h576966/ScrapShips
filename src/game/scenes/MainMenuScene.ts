@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ARENA_HEIGHT, ARENA_WIDTH } from "../data/balance";
+import { VIEWPORT_HEIGHT, VIEWPORT_WIDTH } from "../data/balance";
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -7,12 +7,18 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.add.rectangle(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, ARENA_WIDTH, ARENA_HEIGHT, 0x07111c);
+    this.add.rectangle(
+      VIEWPORT_WIDTH / 2,
+      VIEWPORT_HEIGHT / 2,
+      VIEWPORT_WIDTH,
+      VIEWPORT_HEIGHT,
+      0x07111c
+    );
 
     for (let i = 0; i < 70; i += 1) {
       this.add.circle(
-        Phaser.Math.Between(8, ARENA_WIDTH - 8),
-        Phaser.Math.Between(8, ARENA_HEIGHT - 8),
+        Phaser.Math.Between(8, VIEWPORT_WIDTH - 8),
+        Phaser.Math.Between(8, VIEWPORT_HEIGHT - 8),
         Phaser.Math.Between(1, 2),
         0xffffff,
         Phaser.Math.FloatBetween(0.25, 0.85)
@@ -20,7 +26,7 @@ export class MainMenuScene extends Phaser.Scene {
     }
 
     this.add
-      .text(ARENA_WIDTH / 2, 190, "ScrapShips", {
+      .text(VIEWPORT_WIDTH / 2, 190, "ScrapShips", {
         fontFamily: "monospace",
         fontSize: "54px",
         color: "#ffffff"
@@ -28,18 +34,18 @@ export class MainMenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(ARENA_WIDTH / 2, 252, "Local ship garage and duel prototype", {
+      .text(VIEWPORT_WIDTH / 2, 252, "Local ship garage and duel prototype", {
         fontFamily: "monospace",
         fontSize: "18px",
         color: "#b9cce2"
       })
       .setOrigin(0.5);
 
-    this.addButton(ARENA_WIDTH / 2, 340, "Open Garage", () => {
+    this.addButton(VIEWPORT_WIDTH / 2, 340, "Open Garage", () => {
       this.scene.start("GarageScene");
     });
 
-    this.addButton(ARENA_WIDTH / 2, 410, "Quick Duel", () => {
+    this.addButton(VIEWPORT_WIDTH / 2, 410, "Quick Duel", () => {
       this.scene.start("DuelScene");
     });
   }

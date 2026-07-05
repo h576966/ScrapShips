@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GADGET_OPTIONS } from "../src/game/data/gadgets";
+import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { ShipAttributes, ShipBuild } from "../src/game/model";
 import {
   validateAttributes,
@@ -62,12 +63,26 @@ describe("ShipValidator", () => {
 
   it("uses the shared gadget options for validation", () => {
     for (const gadget of GADGET_OPTIONS) {
-      expect(validateShipBuild(makeShip({ gadget })).valid).toBe(true);
+      expect(validateShipBuild(makeShip({ gadget: gadget.value })).valid).toBe(true);
     }
 
     expect(validateShipBuild(makeShip({ gadget: "cloak" as never })).errors).toContain(
       "ship gadget is not supported"
     );
+  });
+
+  it("validates generated ship visual customization", () => {
+    expect(validateShipBuild(makeShip()).valid).toBe(true);
+    expect(
+      validateShipBuild(
+        makeShip({
+          visual: {
+            ...DEFAULT_SHIP_VISUAL,
+            noseStyle: "round" as never
+          }
+        })
+      ).errors
+    ).toContain("nose style is not supported");
   });
 });
 
@@ -95,6 +110,7 @@ function makeShip(overrides: Partial<ShipBuild> = {}): ShipBuild {
       turbo: 5
     },
     primaryWeapon: "bolt_cannon",
+    visual: DEFAULT_SHIP_VISUAL,
     ...overrides
   };
 }
