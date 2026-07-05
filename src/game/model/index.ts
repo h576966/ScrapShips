@@ -4,5 +4,6 @@ export type {
   HullPixel,
   HullShape,
   ShipAttributes,
-  ShipBuild
+  ShipBuild,
+  WeaponType
 } from "./ShipBuild";

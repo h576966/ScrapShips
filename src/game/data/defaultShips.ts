@@ -17,6 +17,7 @@ export const defaultShipOne: ShipBuild = {
     weapon: 6,
     turbo: 5
   },
+  primaryWeapon: "bolt_cannon",
   gadget: "turbo_burst"
 };
 
@@ -36,5 +37,6 @@ export const defaultShipTwo: ShipBuild = {
     weapon: 6,
     turbo: 5
   },
+  primaryWeapon: "bolt_cannon",
   gadget: "turbo_burst"
 };

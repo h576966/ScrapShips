@@ -1,7 +1,14 @@
-import type { PlayerProfile } from "../model";
+import type { PlayerProfile, ShipBuild } from "../model";
+import { DEFAULT_PRIMARY_WEAPON, isWeaponType } from "../data/weapons";
 import { validatePlayerProfile } from "./ProfileService";
 
 const STORAGE_KEY = "scrapships.profiles.v1";
+type SavedShipCandidate = Partial<Omit<ShipBuild, "primaryWeapon">> & {
+  primaryWeapon?: unknown;
+};
+type SavedProfileCandidate = Partial<Omit<PlayerProfile, "ships">> & {
+  ships?: SavedShipCandidate[];
+};
 
 export function loadProfiles(storage = getBrowserStorage()): PlayerProfile[] | null {
   if (!storage) {
@@ -14,14 +21,15 @@ export function loadProfiles(storage = getBrowserStorage()): PlayerProfile[] | n
   }
 
   try {
-    const parsed = JSON.parse(raw) as PlayerProfile[];
+    const parsed = JSON.parse(raw) as SavedProfileCandidate[];
     if (!Array.isArray(parsed)) {
       return null;
     }
 
-    return parsed.length > 0 &&
-      parsed.every((profile) => validatePlayerProfile(profile).valid)
-      ? parsed
+    const migrated = migrateProfiles(parsed);
+    return migrated.length > 0 &&
+      migrated.every((profile) => validatePlayerProfile(profile).valid)
+      ? migrated
       : null;
   } catch {
     return null;
@@ -46,4 +54,22 @@ export function saveProfiles(
 
 function getBrowserStorage(): Storage | undefined {
   return typeof window === "undefined" ? undefined : window.localStorage;
+}
+
+function migrateProfiles(profiles: SavedProfileCandidate[]): PlayerProfile[] {
+  return profiles.map((profile) => ({
+    ...profile,
+    ships: Array.isArray(profile.ships)
+      ? profile.ships.map((ship) => migrateShip(ship))
+      : []
+  })) as PlayerProfile[];
+}
+
+function migrateShip(ship: SavedShipCandidate): SavedShipCandidate {
+  return {
+    ...ship,
+    primaryWeapon: isWeaponType(ship.primaryWeapon)
+      ? ship.primaryWeapon
+      : DEFAULT_PRIMARY_WEAPON
+  };
 }

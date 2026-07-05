@@ -72,6 +72,7 @@ canvas {
 .garage-header p,
 .ship-count,
 .stats-line,
+.weapon-summary,
 .ship-row small,
 .panel-title span {
   color: #adc2d9;
@@ -196,6 +197,16 @@ canvas {
   margin-top: 12px;
   padding-top: 12px;
   font-size: 13px;
+}
+
+.weapon-summary {
+  border: 1px solid #203954;
+  border-radius: 6px;
+  background: #091724;
+  font-size: 13px;
+  line-height: 1.35;
+  margin: -2px 0 12px;
+  padding: 8px;
 }
 
 .garage-ui button {

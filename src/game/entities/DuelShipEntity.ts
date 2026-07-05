@@ -1,8 +1,20 @@
 import Phaser from "phaser";
+import { getHullVisual } from "../data/hullPresets";
 import type { PlayerId } from "../input/bindings";
 import type { ShipBuild } from "../model";
 import type { ShipStats } from "../services/ShipStatsCalculator";
 import type { PlayerInputState } from "../systems/InputSystem";
+import {
+  applyCorrosiveDamageOverTime,
+  applyPickupEffect,
+  createEmptyShipEffects,
+  expireTimedEffects,
+  getSpeedMultiplier,
+  hasCorrosiveAmmo,
+  tickDamageOverTime,
+  type PickupType,
+  type ShipEffectState
+} from "../systems/PickupSystem";
 
 export type DuelShipOptions = {
   playerId: PlayerId;
@@ -20,9 +32,11 @@ export class DuelShipEntity {
   readonly playerId: PlayerId;
   readonly build: ShipBuild;
   readonly stats: ShipStats;
-  readonly shape: Phaser.GameObjects.Triangle;
+  readonly shape: Phaser.GameObjects.Polygon;
 
   private readonly boostFlame: Phaser.GameObjects.Triangle;
+  private readonly cockpit: Phaser.GameObjects.Polygon;
+  private readonly stripe: Phaser.GameObjects.Polygon;
   private readonly nameLabel: Phaser.GameObjects.Text;
   private readonly hpBarBack: Phaser.GameObjects.Rectangle;
   private readonly hpBar: Phaser.GameObjects.Rectangle;
@@ -33,11 +47,12 @@ export class DuelShipEntity {
   private readonly flameDistance: number;
   private readonly hudOffset: number;
   private hitFlashUntil = 0;
+  private effects: ShipEffectState = createEmptyShipEffects();
 
   hp: number;
   shield: number;
 
-  private fireReadyAt = 0;
+  fireReadyAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -50,14 +65,15 @@ export class DuelShipEntity {
     this.secondaryColor = colorToNumber(options.build.colors.secondary);
     this.hp = options.stats.maxHp;
     this.shield = options.stats.maxShield;
+    const visual = getHullVisual(options.build.hullShape);
     const visualScale = Phaser.Math.Clamp(
       0.78 + Math.sqrt(options.stats.hullPixelCount) / 10,
       0.92,
       1.65
     );
-    const noseLength = 19 * visualScale;
-    const tailLength = 15 * visualScale;
-    const halfWidth = 15 * visualScale;
+    const noseLength = (visual.bodyHeight / 2) * visualScale;
+    const tailLength = (visual.bodyHeight / 2) * visualScale;
+    const halfWidth = (visual.bodyWidth / 2) * visualScale;
     this.muzzleDistance = noseLength + 6;
     this.flameDistance = tailLength + 9;
     this.hudOffset = noseLength + 32;
@@ -66,20 +82,33 @@ export class DuelShipEntity {
     this.boostFlame.setBlendMode(Phaser.BlendModes.ADD);
     this.boostFlame.setDepth(5);
 
-    this.shape = scene.add.triangle(
+    this.shape = scene.add.polygon(
       options.spawn.x,
       options.spawn.y,
-      0,
-      -noseLength,
-      halfWidth,
-      tailLength,
-      -halfWidth,
-      tailLength,
+      scalePoints(visual.points, visualScale),
       this.primaryColor
     );
     this.shape.setStrokeStyle(2, this.secondaryColor);
     this.shape.setDepth(10);
     scene.physics.add.existing(this.shape);
+
+    this.cockpit = scene.add.polygon(
+      options.spawn.x,
+      options.spawn.y,
+      scalePoints(visual.cockpit, visualScale),
+      this.secondaryColor,
+      0.92
+    );
+    this.cockpit.setDepth(11);
+
+    this.stripe = scene.add.polygon(
+      options.spawn.x,
+      options.spawn.y,
+      scalePoints(visual.stripe, visualScale),
+      this.secondaryColor,
+      0.65
+    );
+    this.stripe.setDepth(11);
 
     const body = this.body;
     body.setAllowGravity(false);
@@ -126,39 +155,47 @@ export class DuelShipEntity {
     this.shield = this.stats.maxShield;
     this.fireReadyAt = 0;
     this.hitFlashUntil = 0;
+    this.effects = createEmptyShipEffects();
     this.shape.setActive(true).setVisible(true);
+    this.cockpit.setVisible(true);
+    this.stripe.setVisible(true);
     this.boostFlame.setVisible(false);
     this.body.enable = true;
     this.body.reset(x, y);
     this.body.setVelocity(0, 0);
     this.shape.setRotation(rotation);
+    this.updateHullDetails();
     this.updateHud();
   }
 
   update(deltaMs: number, input: PlayerInputState, canMove: boolean, time: number): void {
+    this.updateStatusEffects(time);
+
     if (!this.alive) {
       this.body.setVelocity(0, 0);
       this.boostFlame.setVisible(false);
+      this.updateHullDetails();
       this.updateHud();
       return;
     }
 
     if (canMove) {
-      this.updateMovement(deltaMs, input);
+      this.updateMovement(deltaMs, input, time);
     }
 
     const flash = time < this.hitFlashUntil;
     this.shape.setFillStyle(flash ? 0xffffff : this.primaryColor);
+    this.shape.setStrokeStyle(
+      2,
+      getSpeedMultiplier(this.effects, time) > 1 ? 0x7dd3ff : this.secondaryColor
+    );
+    this.updateHullDetails();
     this.updateBoostFlame(input.thrust || input.turbo);
     this.updateHud();
   }
 
-  canFire(time: number): boolean {
-    return this.alive && time >= this.fireReadyAt;
-  }
-
-  markFired(time: number): void {
-    this.fireReadyAt = time + this.stats.fireCooldownMs;
+  markFired(time: number, cooldownMs: number): void {
+    this.fireReadyAt = time + cooldownMs;
   }
 
   takeDamage(amount: number, time: number): void {
@@ -171,11 +208,52 @@ export class DuelShipEntity {
     this.hp = Math.max(0, this.hp - (amount - absorbed));
     this.hitFlashUntil = time + 90;
 
+    this.hideIfDestroyed();
+  }
+
+  takeHullDamage(amount: number, time: number): void {
     if (!this.alive) {
-      this.body.enable = false;
-      this.shape.setVisible(false);
-      this.boostFlame.setVisible(false);
+      return;
     }
+
+    this.hp = Math.max(0, this.hp - amount);
+    this.hitFlashUntil = time + 90;
+    this.hideIfDestroyed();
+  }
+
+  applyPickup(pickupType: PickupType, time: number): void {
+    const result = applyPickupEffect(
+      this.hp,
+      this.stats.maxHp,
+      this.effects,
+      pickupType,
+      time
+    );
+    this.hp = result.hp;
+    this.effects = result.effects;
+    this.hitFlashUntil = time + 120;
+    this.updateHud();
+  }
+
+  hasCorrosiveAmmo(time: number): boolean {
+    return hasCorrosiveAmmo(this.effects, time);
+  }
+
+  applyCorrosiveDamageOverTime(time: number): void {
+    this.effects = applyCorrosiveDamageOverTime(this.effects, time);
+  }
+
+  getEffectSnapshot(time: number): {
+    speedBoostActive: boolean;
+    corrosiveAmmoActive: boolean;
+    damageOverTimeActive: boolean;
+  } {
+    return {
+      speedBoostActive: getSpeedMultiplier(this.effects, time) > 1,
+      corrosiveAmmoActive: hasCorrosiveAmmo(this.effects, time),
+      damageOverTimeActive:
+        this.effects.damageOverTime !== null && this.effects.damageOverTime.endsAt > time
+    };
   }
 
   getFacingAngle(): number {
@@ -190,18 +268,25 @@ export class DuelShipEntity {
     );
   }
 
+  getHitRadius(): number {
+    return Math.max(this.body.width, this.body.height) * 0.52;
+  }
+
   destroy(): void {
     this.shape.destroy();
     this.boostFlame.destroy();
+    this.cockpit.destroy();
+    this.stripe.destroy();
     this.nameLabel.destroy();
     this.hpBarBack.destroy();
     this.hpBar.destroy();
     this.shieldBar.destroy();
   }
 
-  private updateMovement(deltaMs: number, input: PlayerInputState): void {
+  private updateMovement(deltaMs: number, input: PlayerInputState, time: number): void {
     const dt = deltaMs / 1000;
     const rotationStep = this.stats.turnRate * dt;
+    const speedMultiplier = getSpeedMultiplier(this.effects, time);
 
     if (input.rotateLeft) {
       this.shape.rotation -= rotationStep;
@@ -214,19 +299,42 @@ export class DuelShipEntity {
     const forwardX = Math.cos(angle);
     const forwardY = Math.sin(angle);
     const force =
-      (input.thrust ? this.stats.acceleration : 0) +
-      (input.turbo ? this.stats.turboAcceleration : 0) -
-      (input.brake ? this.stats.acceleration * 0.65 : 0);
+      (input.thrust ? this.stats.acceleration * speedMultiplier : 0) +
+      (input.turbo ? this.stats.turboAcceleration * speedMultiplier : 0) -
+      (input.brake ? this.stats.acceleration * 0.65 * speedMultiplier : 0);
 
     this.body.velocity.x += forwardX * force * dt;
     this.body.velocity.y += forwardY * force * dt;
 
     this.body.velocity.scale(input.thrust || input.brake || input.turbo ? 0.995 : 0.988);
 
-    const maxSpeed = input.turbo ? this.stats.turboMaxSpeed : this.stats.maxSpeed;
+    const maxSpeed =
+      (input.turbo ? this.stats.turboMaxSpeed : this.stats.maxSpeed) * speedMultiplier;
     if (this.body.velocity.length() > maxSpeed) {
       this.body.velocity.setLength(maxSpeed);
     }
+  }
+
+  private updateStatusEffects(time: number): void {
+    this.effects = expireTimedEffects(this.effects, time);
+    const dotTick = tickDamageOverTime(this.effects, time);
+    this.effects = dotTick.effects;
+
+    if (dotTick.damage > 0) {
+      this.takeDamage(dotTick.damage, time);
+    }
+  }
+
+  private hideIfDestroyed(): void {
+    if (this.alive) {
+      return;
+    }
+
+    this.body.enable = false;
+    this.shape.setVisible(false);
+    this.cockpit.setVisible(false);
+    this.stripe.setVisible(false);
+    this.boostFlame.setVisible(false);
   }
 
   private updateBoostFlame(active: boolean): void {
@@ -243,6 +351,16 @@ export class DuelShipEntity {
       this.shape.y - Math.sin(angle) * this.flameDistance
     );
     this.boostFlame.setRotation(this.shape.rotation);
+  }
+
+  private updateHullDetails(): void {
+    const visible = this.alive;
+    this.cockpit.setPosition(this.shape.x, this.shape.y);
+    this.cockpit.setRotation(this.shape.rotation);
+    this.cockpit.setVisible(visible);
+    this.stripe.setPosition(this.shape.x, this.shape.y);
+    this.stripe.setRotation(this.shape.rotation);
+    this.stripe.setVisible(visible);
   }
 
   private updateHud(): void {
@@ -271,4 +389,8 @@ export class DuelShipEntity {
 
 function colorToNumber(color: string): number {
   return Number.parseInt(color.replace("#", ""), 16);
+}
+
+function scalePoints(points: number[], scale: number): number[] {
+  return points.map((value) => value * scale);
 }

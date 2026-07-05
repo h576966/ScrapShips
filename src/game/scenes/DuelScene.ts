@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { ARENA_HEIGHT, ARENA_WIDTH } from "../data/balance";
 import { ensureTwoPlayableProfiles } from "../data/defaultProfiles";
-import { Projectile } from "../entities/Projectile";
+import { getWeaponDefinition } from "../data/weapons";
 import { DuelShipEntity } from "../entities/DuelShipEntity";
 import {
   DEFAULT_PLAYER_BINDINGS,
@@ -14,9 +14,17 @@ import type { PlayerProfile, ShipBuild } from "../model";
 import { getActiveShip } from "../services/ProfileService";
 import { loadProfiles, saveProfiles } from "../services/SaveService";
 import { calculateShipStats } from "../services/ShipStatsCalculator";
+import { ArenaObjectSystem } from "../systems/ArenaObjectSystem";
+import { DuelCombatSystem } from "../systems/DuelCombatSystem";
+import { DuelEffects } from "../systems/DuelEffects";
+import {
+  PLAYER_IDS,
+  type DuelDebugApi,
+  type ShipDebugSnapshot,
+  type ShipMap
+} from "../systems/DuelTypes";
 import { InputSystem } from "../systems/InputSystem";
 
-type ShipMap = Record<PlayerId, DuelShipEntity>;
 type DuelSlotSelection = {
   profileId: string;
   shipId: string;
@@ -24,11 +32,18 @@ type DuelSlotSelection = {
 
 export type DuelSceneData = Partial<Record<PlayerId, DuelSlotSelection>>;
 
+declare global {
+  interface Window {
+    __scrapshipsDuelDebug?: DuelDebugApi;
+  }
+}
+
 export class DuelScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
+  private effects!: DuelEffects;
+  private arena!: ArenaObjectSystem;
+  private combat!: DuelCombatSystem;
   private ships!: ShipMap;
-  private projectiles: Projectile[] = [];
-  private projectileGroup!: Phaser.Physics.Arcade.Group;
   private messageText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
   private duelData: DuelSceneData = {};
@@ -65,22 +80,17 @@ export class DuelScene extends Phaser.Scene {
     const playerTwo = this.resolveDuelSlot("p2", profiles);
 
     this.inputSystem = new InputSystem(this);
-    this.projectileGroup = this.physics.add.group();
-
+    this.effects = new DuelEffects(this);
     this.ships = {
-      p1: new DuelShipEntity(this, {
-        playerId: "p1",
-        label: `${playerOne.profile.name}: ${playerOne.ship.name}\nGadget: ${playerOne.ship.gadget ?? "none"}`,
-        build: playerOne.ship,
-        stats: calculateShipStats(playerOne.ship),
-        spawn: { x: 220, y: ARENA_HEIGHT / 2, rotation: Math.PI / 2 }
+      p1: this.createShipEntity("p1", playerOne, {
+        x: 220,
+        y: ARENA_HEIGHT / 2,
+        rotation: Math.PI / 2
       }),
-      p2: new DuelShipEntity(this, {
-        playerId: "p2",
-        label: `${playerTwo.profile.name}: ${playerTwo.ship.name}\nGadget: ${playerTwo.ship.gadget ?? "none"}`,
-        build: playerTwo.ship,
-        stats: calculateShipStats(playerTwo.ship),
-        spawn: { x: ARENA_WIDTH - 220, y: ARENA_HEIGHT / 2, rotation: -Math.PI / 2 }
+      p2: this.createShipEntity("p2", playerTwo, {
+        x: ARENA_WIDTH - 220,
+        y: ARENA_HEIGHT / 2,
+        rotation: -Math.PI / 2
       })
     };
 
@@ -92,37 +102,60 @@ export class DuelScene extends Phaser.Scene {
       this
     );
 
-    this.physics.add.overlap(this.projectileGroup, this.ships.p1.shape, (projectile) =>
-      this.handleProjectileHit(projectile as Phaser.GameObjects.Arc, this.ships.p1)
-    );
-    this.physics.add.overlap(this.projectileGroup, this.ships.p2.shape, (projectile) =>
-      this.handleProjectileHit(projectile as Phaser.GameObjects.Arc, this.ships.p2)
-    );
+    this.arena = new ArenaObjectSystem(this, this.ships, this.effects);
+    this.combat = new DuelCombatSystem(this, this.ships, this.arena, this.effects);
+    this.arena.reset();
 
     this.createHud();
+    this.installDebugHooks();
     this.input.keyboard?.on("keydown", this.onSystemKeyDown);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.shutdown());
   }
 
   update(time: number, delta: number): void {
-    this.updateProjectiles(time);
+    this.arena.update(time);
+    this.combat.update(time, delta);
 
-    for (const playerId of ["p1", "p2"] as const) {
+    for (const playerId of PLAYER_IDS) {
       const ship = this.ships[playerId];
       const input = this.inputSystem.getPlayerState(playerId);
       ship.update(delta, input, !this.roundOver, time);
 
-      if (!this.roundOver && input.fire && ship.canFire(time)) {
-        this.fireProjectile(ship, time);
+      if (!this.roundOver && input.fire) {
+        this.combat.firePrimaryWeapon(ship, time, delta);
       }
+    }
+
+    if (!this.roundOver) {
+      this.arena.updateInteractions(time);
     }
 
     this.updateDebugText();
     this.checkWinState();
   }
 
+  private createShipEntity(
+    playerId: PlayerId,
+    selection: { profile: PlayerProfile; ship: ShipBuild },
+    spawn: { x: number; y: number; rotation: number }
+  ): DuelShipEntity {
+    return new DuelShipEntity(this, {
+      playerId,
+      label: `${selection.profile.name}: ${selection.ship.name}\n${getWeaponDefinition(selection.ship.primaryWeapon).label} | ${selection.ship.gadget ?? "none"}`,
+      build: selection.ship,
+      stats: calculateShipStats(selection.ship),
+      spawn
+    });
+  }
+
   private createBackground(): void {
-    this.add.rectangle(ARENA_WIDTH / 2, ARENA_HEIGHT / 2, ARENA_WIDTH, ARENA_HEIGHT, 0x07111c);
+    this.add.rectangle(
+      ARENA_WIDTH / 2,
+      ARENA_HEIGHT / 2,
+      ARENA_WIDTH,
+      ARENA_HEIGHT,
+      0x07111c
+    );
 
     for (let i = 0; i < 90; i += 1) {
       const x = Phaser.Math.Between(8, ARENA_WIDTH - 8);
@@ -173,39 +206,6 @@ export class DuelScene extends Phaser.Scene {
     this.debugText.setDepth(40);
   }
 
-  private fireProjectile(ship: DuelShipEntity, time: number): void {
-    const muzzle = ship.getMuzzlePosition();
-    const projectile = new Projectile(
-      this,
-      ship.playerId,
-      muzzle.x,
-      muzzle.y,
-      ship.getFacingAngle(),
-      ship.stats.projectileSpeed,
-      ship.stats.projectileDamage,
-      ship.playerId === "p1" ? 0x99ddff : 0xffb0b4,
-      time
-    );
-
-    this.projectileGroup.add(projectile.sprite);
-    this.projectiles.push(projectile);
-    ship.markFired(time);
-  }
-
-  private handleProjectileHit(
-    projectileObject: Phaser.GameObjects.Arc,
-    target: DuelShipEntity
-  ): void {
-    const projectile = projectileObject.getData("projectile") as Projectile | undefined;
-    if (!projectile || projectile.ownerId === target.playerId || projectile.isDestroyed) {
-      return;
-    }
-
-    target.takeDamage(projectile.damage, this.time.now);
-    projectile.destroy();
-    this.cameras.main.shake(80, 0.003);
-  }
-
   private handleShipCollision(): void {
     const time = this.time.now;
     if (time - this.lastShipCollisionAt < 300 || this.roundOver) {
@@ -233,14 +233,6 @@ export class DuelScene extends Phaser.Scene {
     this.cameras.main.shake(110, 0.005);
   }
 
-  private updateProjectiles(time: number): void {
-    for (const projectile of this.projectiles) {
-      projectile.update(time);
-    }
-
-    this.projectiles = this.projectiles.filter((projectile) => !projectile.isDestroyed);
-  }
-
   private checkWinState(): void {
     if (this.roundOver) {
       return;
@@ -265,10 +257,10 @@ export class DuelScene extends Phaser.Scene {
     this.roundOver = false;
     this.lastShipCollisionAt = 0;
     this.messageText.setVisible(false);
-    this.projectiles.forEach((projectile) => projectile.destroy());
-    this.projectiles = [];
+    this.combat.reset();
     this.ships.p1.reset(220, ARENA_HEIGHT / 2, Math.PI / 2);
     this.ships.p2.reset(ARENA_WIDTH - 220, ARENA_HEIGHT / 2, -Math.PI / 2);
+    this.arena.reset();
   }
 
   private updateDebugText(): void {
@@ -296,9 +288,73 @@ export class DuelScene extends Phaser.Scene {
   private shutdown(): void {
     this.inputSystem.destroy();
     this.input.keyboard?.off("keydown", this.onSystemKeyDown);
-    for (const projectile of this.projectiles) {
-      projectile.destroy();
+    this.combat.destroy();
+    this.arena.destroy();
+    if (import.meta.env.DEV) {
+      delete window.__scrapshipsDuelDebug;
     }
-    this.projectiles = [];
+  }
+
+  private installDebugHooks(): void {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    window.__scrapshipsDuelDebug = {
+      getSnapshot: () => ({
+        projectileCount: this.combat.projectileCount,
+        asteroidCount: this.arena.asteroidCount,
+        pickupCount: this.arena.pickupCount,
+        roundOver: this.roundOver,
+        p1: this.getShipDebugSnapshot("p1"),
+        p2: this.getShipDebugSnapshot("p2"),
+        projectiles: this.combat.getProjectileSnapshots(),
+        asteroids: this.arena.getAsteroidSnapshots(),
+        pickups: this.arena.getPickupSnapshots()
+      }),
+      setShipPose: (playerId, x, y, rotation) => {
+        const ship = this.ships[playerId];
+        ship.body.reset(x, y);
+        ship.body.setVelocity(0, 0);
+        ship.shape.setRotation(rotation);
+      },
+      setShipVelocity: (playerId, x, y) => {
+        this.ships[playerId].body.setVelocity(x, y);
+      },
+      setShipWeapon: (playerId, weapon) => {
+        this.combat.setShipWeapon(playerId, weapon);
+      },
+      damageShip: (playerId, amount) => {
+        this.ships[playerId].takeDamage(amount, this.time.now);
+      },
+      setAsteroidPose: (id, x, y) => {
+        this.arena.setAsteroidPose(id, x, y);
+      },
+      setAsteroidHp: (id, hp) => {
+        this.arena.setAsteroidHp(id, hp);
+      },
+      damageAsteroid: (id, amount) => {
+        this.arena.damageAsteroidById(id, amount);
+      },
+      forceNextPickupDrop: (type) => {
+        this.arena.forceNextPickupDrop(type);
+      },
+      spawnPickup: (type, x, y, lifetimeMs) =>
+        this.arena.spawnPickup(type, x, y, lifetimeMs).id
+    };
+  }
+
+  private getShipDebugSnapshot(playerId: PlayerId): ShipDebugSnapshot {
+    const ship = this.ships[playerId];
+    return {
+      hp: ship.hp,
+      shield: ship.shield,
+      weapon: ship.build.primaryWeapon,
+      x: ship.shape.x,
+      y: ship.shape.y,
+      velocityX: ship.body.velocity.x,
+      velocityY: ship.body.velocity.y,
+      ...ship.getEffectSnapshot(this.time.now)
+    };
   }
 }

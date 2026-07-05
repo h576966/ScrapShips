@@ -4,9 +4,11 @@ import {
   createShip,
   deleteShip,
   duplicateShip,
+  renameProfile,
   selectActiveShip,
   updateShipAttributes,
   updateShipColors,
+  updateShipPrimaryWeapon,
   validatePlayerProfile
 } from "../src/game/services/ProfileService";
 
@@ -158,6 +160,25 @@ describe("ProfileService", () => {
     expect(result.ok).toBe(true);
     expect(result.profile.activeShipId).toBe("ship-1");
   });
+
+  it("renames a profile without changing active ship", () => {
+    const profile = makeProfile();
+
+    const result = renameProfile(profile, "Captain Scrap");
+
+    expect(result.ok).toBe(true);
+    expect(result.profile.name).toBe("Captain Scrap");
+    expect(result.profile.activeShipId).toBe("ship-1");
+  });
+
+  it("updates primary weapon", () => {
+    const profile = makeProfile();
+
+    const result = updateShipPrimaryWeapon(profile, "ship-1", "rail_shot");
+
+    expect(result.ok).toBe(true);
+    expect(result.profile.ships[0].primaryWeapon).toBe("rail_shot");
+  });
 });
 
 function makeProfile(overrides: Partial<PlayerProfile> = {}): PlayerProfile {
@@ -197,6 +218,7 @@ function makeShip(id: string): ShipBuild {
       weapon: 5,
       turbo: 5
     },
+    primaryWeapon: "bolt_cannon",
     gadget: "turbo_burst"
   };
 }

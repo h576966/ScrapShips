@@ -6,39 +6,47 @@ import {
   SHIP_ATTRIBUTE_KEYS
 } from "../data/balance";
 import { ensureTwoPlayableProfiles } from "../data/defaultProfiles";
+import { GADGET_OPTIONS, isGadgetType } from "../data/gadgets";
+import {
+  WEAPON_DEFINITIONS,
+  getWeaponDefinition,
+  isWeaponType
+} from "../data/weapons";
 import {
   HULL_PRESETS,
   findHullPresetId,
   type HullPresetId
 } from "../data/hullPresets";
-import type { GadgetType, PlayerProfile, ShipAttributes, ShipBuild } from "../model";
+import type {
+  GadgetType,
+  PlayerProfile,
+  ShipAttributes,
+  ShipBuild,
+  WeaponType
+} from "../model";
 import {
   canAddShip,
   createShip,
   deleteShip,
   duplicateShip,
   getActiveShip,
+  renameProfile,
   renameShip,
   selectActiveShip,
   updateShipAttributes,
   updateShipColors,
   updateShipGadget,
   updateShipHullPreset,
+  updateShipPrimaryWeapon,
   validatePlayerProfile,
   type ProfileEditResult
 } from "../services/ProfileService";
 import { loadProfiles, saveProfiles } from "../services/SaveService";
 import { calculateShipStats } from "../services/ShipStatsCalculator";
 import { getAttributeTotal } from "../services/ShipValidator";
+import { escapeHtml, renderSelectOptions } from "../ui/html";
 
 type PlayerSlot = "p1" | "p2";
-
-const GADGET_OPTIONS: readonly GadgetType[] = [
-  "none",
-  "mine",
-  "repair_pulse",
-  "turbo_burst"
-];
 
 export class GarageScene extends Phaser.Scene {
   private root!: HTMLDivElement;
@@ -169,6 +177,12 @@ export class GarageScene extends Phaser.Scene {
       return;
     }
 
+    if (action === "profile-name" && slot) {
+      this.editingSlot = slot;
+      this.commit(renameProfile(this.getProfileForSlot(slot), target.value));
+      return;
+    }
+
     const profile = this.getProfileForSlot(this.editingSlot);
     const activeShip = getActiveShip(profile);
     if (!activeShip) {
@@ -194,6 +208,14 @@ export class GarageScene extends Phaser.Scene {
       const gadget = toGadgetType(target.value);
       if (gadget) {
         this.commit(updateShipGadget(profile, activeShip.id, gadget));
+      }
+      return;
+    }
+
+    if (action === "primary-weapon") {
+      const primaryWeapon = toWeaponType(target.value);
+      if (primaryWeapon) {
+        this.commit(updateShipPrimaryWeapon(profile, activeShip.id, primaryWeapon));
       }
     }
   };
@@ -240,15 +262,18 @@ export class GarageScene extends Phaser.Scene {
         <label class="field-label">
           Profile
           <select data-action="select-profile" data-slot="${slot}">
-            ${this.profiles
-              .map(
-                (candidate) =>
-                  `<option value="${escapeHtml(candidate.id)}" ${
-                    candidate.id === profile.id ? "selected" : ""
-                  }>${escapeHtml(candidate.name)}</option>`
-              )
-              .join("")}
+            ${renderSelectOptions(
+              this.profiles.map((candidate) => ({
+                value: candidate.id,
+                label: candidate.name
+              })),
+              profile.id
+            )}
           </select>
+        </label>
+        <label class="field-label">
+          Display name
+          <input data-action="profile-name" data-slot="${slot}" value="${escapeHtml(profile.name)}" maxlength="24" />
         </label>
         <div class="ship-count">Ships ${profile.ships.length}/${MAX_SHIPS_PER_PROFILE}</div>
         <div class="ship-list">${shipRows}</div>
@@ -271,13 +296,14 @@ export class GarageScene extends Phaser.Scene {
     const active = ship.id === profile.activeShipId;
     const attributes = getAttributeTotal(ship.attributes);
     const stats = calculateShipStats(ship);
+    const weapon = getWeaponDefinition(ship.primaryWeapon);
     return `
       <button type="button" class="ship-row ${active ? "active" : ""}"
         data-action="select-ship" data-slot="${slot}" data-ship-id="${escapeHtml(ship.id)}">
         <span class="ship-swatch" style="background:${escapeHtml(ship.colors.primary)}"></span>
         <span>
           <strong>${escapeHtml(ship.name)}</strong>
-          <small>${attributes}/${ATTRIBUTE_TOTAL_MAX} pts | mass ${stats.mass}</small>
+          <small>${weapon.label} | ${attributes}/${ATTRIBUTE_TOTAL_MAX} pts | mass ${stats.mass}</small>
         </span>
       </button>
     `;
@@ -297,6 +323,7 @@ export class GarageScene extends Phaser.Scene {
     const remaining = ATTRIBUTE_TOTAL_MAX - total;
     const stats = calculateShipStats(ship);
     const hullPresetId = findHullPresetId(ship.hullShape);
+    const weapon = getWeaponDefinition(ship.primaryWeapon);
 
     return `
       <section class="garage-panel builder-panel">
@@ -325,14 +352,29 @@ export class GarageScene extends Phaser.Scene {
           ).join("")}
         </div>
         <label class="field-label">
+          Primary weapon
+          <select data-action="primary-weapon">
+            ${renderSelectOptions(
+              WEAPON_DEFINITIONS.map((candidate) => ({
+                value: candidate.type,
+                label: candidate.label
+              })),
+              ship.primaryWeapon
+            )}
+          </select>
+        </label>
+        <div class="weapon-summary">
+          Range ${weapon.range} | ${weapon.mode === "continuous" ? `${weapon.baseDamage} DPS` : `${weapon.baseDamage} dmg`}
+          | ${weapon.cooldownMs > 0 ? `${Math.round(1000 / weapon.cooldownMs)} shots/sec` : "hold beam"}
+          | ${escapeHtml(weapon.difficulty)}
+        </div>
+        <label class="field-label">
           Gadget
           <select data-action="gadget">
-            ${GADGET_OPTIONS.map(
-              (gadget) =>
-                `<option value="${gadget}" ${
-                  (ship.gadget ?? "none") === gadget ? "selected" : ""
-                }>${gadget}</option>`
-            ).join("")}
+            ${renderSelectOptions(
+              GADGET_OPTIONS.map((gadget) => ({ value: gadget, label: gadget })),
+              ship.gadget ?? "none"
+            )}
           </select>
         </label>
         <div class="builder-block">
@@ -479,13 +521,9 @@ function toHullPresetId(value: string | undefined): HullPresetId | undefined {
 }
 
 function toGadgetType(value: string | undefined): GadgetType | undefined {
-  return GADGET_OPTIONS.find((gadget) => gadget === value);
+  return isGadgetType(value) ? value : undefined;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function toWeaponType(value: string | undefined): WeaponType | undefined {
+  return isWeaponType(value) ? value : undefined;
 }

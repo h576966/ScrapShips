@@ -5,19 +5,15 @@ import {
   HULL_GRID_SIZE,
   SHIP_ATTRIBUTE_KEYS
 } from "../data/balance";
-import type { GadgetType, HullShape, ShipAttributes, ShipBuild } from "../model";
+import { isGadgetType } from "../data/gadgets";
+import { isWeaponType } from "../data/weapons";
+import type { HullShape, ShipAttributes, ShipBuild } from "../model";
 
 export type ValidationResult = {
   valid: boolean;
   errors: string[];
 };
 
-const GADGET_TYPES: readonly GadgetType[] = [
-  "none",
-  "mine",
-  "repair_pulse",
-  "turbo_burst"
-];
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 export function getAttributeTotal(attributes: ShipAttributes): number {
@@ -112,7 +108,11 @@ export function validateShipBuild(ship: ShipBuild): ValidationResult {
   const hull = validateHullShape(ship.hullShape);
   errors.push(...hull.errors);
 
-  if (ship.gadget !== undefined && !GADGET_TYPES.includes(ship.gadget)) {
+  if (!isWeaponType(ship.primaryWeapon)) {
+    errors.push("primary weapon is not supported");
+  }
+
+  if (ship.gadget !== undefined && !isGadgetType(ship.gadget)) {
     errors.push("ship gadget is not supported");
   }
 

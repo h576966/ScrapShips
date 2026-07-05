@@ -35,7 +35,8 @@ function makeShip(pixelCount: number): ShipBuild {
       shield: 5,
       weapon: 5,
       turbo: 5
-    }
+    },
+    primaryWeapon: "bolt_cannon"
   };
 }
 

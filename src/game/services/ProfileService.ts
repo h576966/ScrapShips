@@ -1,11 +1,13 @@
 import { MAX_SHIPS_PER_PROFILE } from "../data/balance";
 import { getHullPreset } from "../data/hullPresets";
+import type { HullPresetId } from "../data/hullPresets";
 import type {
   GadgetType,
   HullShape,
   PlayerProfile,
   ShipAttributes,
-  ShipBuild
+  ShipBuild,
+  WeaponType
 } from "../model";
 import { validateShipBuild, type ValidationResult } from "./ShipValidator";
 
@@ -61,6 +63,20 @@ export function getActiveShip(profile: PlayerProfile): ShipBuild | undefined {
 
 export function canAddShip(profile: PlayerProfile): boolean {
   return profile.ships.length < MAX_SHIPS_PER_PROFILE;
+}
+
+export function renameProfile(profile: PlayerProfile, name: string): ProfileEditResult {
+  const trimmed = name.trim();
+  const updated = {
+    ...profile,
+    name: trimmed || profile.name
+  };
+  const validation = validatePlayerProfile(updated);
+  if (!validation.valid) {
+    return { ok: false, profile, error: validation.errors[0] };
+  }
+
+  return { ok: true, profile: updated };
 }
 
 export function createShip(profile: PlayerProfile, id = makeId("ship")): ProfileEditResult {
@@ -190,6 +206,14 @@ export function updateShipGadget(
   return updateShip(profile, shipId, (ship) => ({ ...ship, gadget }));
 }
 
+export function updateShipPrimaryWeapon(
+  profile: PlayerProfile,
+  shipId: string,
+  primaryWeapon: WeaponType
+): ProfileEditResult {
+  return updateShip(profile, shipId, (ship) => ({ ...ship, primaryWeapon }));
+}
+
 export function updateShipHullShape(
   profile: PlayerProfile,
   shipId: string,
@@ -201,7 +225,7 @@ export function updateShipHullShape(
 export function updateShipHullPreset(
   profile: PlayerProfile,
   shipId: string,
-  presetId: "small" | "medium" | "wide" | "heavy"
+  presetId: HullPresetId
 ): ProfileEditResult {
   return updateShipHullShape(profile, shipId, getHullPreset(presetId));
 }

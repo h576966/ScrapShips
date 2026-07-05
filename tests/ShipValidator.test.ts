@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { GADGET_OPTIONS } from "../src/game/data/gadgets";
 import type { ShipAttributes, ShipBuild } from "../src/game/model";
 import {
   validateAttributes,
@@ -49,6 +50,25 @@ describe("ShipValidator", () => {
       "primary color must be a 6-digit hex color"
     );
   });
+
+  it("rejects unsupported primary weapons", () => {
+    const ship = makeShip({
+      primaryWeapon: "plasma" as never
+    });
+
+    expect(validateShipBuild(ship).valid).toBe(false);
+    expect(validateShipBuild(ship).errors).toContain("primary weapon is not supported");
+  });
+
+  it("uses the shared gadget options for validation", () => {
+    for (const gadget of GADGET_OPTIONS) {
+      expect(validateShipBuild(makeShip({ gadget })).valid).toBe(true);
+    }
+
+    expect(validateShipBuild(makeShip({ gadget: "cloak" as never })).errors).toContain(
+      "ship gadget is not supported"
+    );
+  });
 });
 
 function makeShip(overrides: Partial<ShipBuild> = {}): ShipBuild {
@@ -74,6 +94,7 @@ function makeShip(overrides: Partial<ShipBuild> = {}): ShipBuild {
       weapon: 5,
       turbo: 5
     },
+    primaryWeapon: "bolt_cannon",
     ...overrides
   };
 }

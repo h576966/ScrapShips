@@ -12,6 +12,57 @@ describe("SaveService", () => {
     expect(loadProfiles(storage)).toEqual(profiles);
   });
 
+  it("migrates old saved ships to the default primary weapon", () => {
+    const storage = makeStorage();
+    const profile = makeProfile("profile-1");
+    const legacyProfile = {
+      ...profile,
+      ships: profile.ships.map(({ primaryWeapon: _primaryWeapon, ...ship }) => ship)
+    };
+    storage.setItem("scrapships.profiles.v1", JSON.stringify([legacyProfile]));
+
+    const loaded = loadProfiles(storage);
+
+    expect(loaded?.[0].ships[0].primaryWeapon).toBe("bolt_cannon");
+  });
+
+  it("migrates invalid saved primary weapons to the default", () => {
+    const storage = makeStorage();
+    const profile = makeProfile("profile-1");
+    const legacyProfile = {
+      ...profile,
+      ships: profile.ships.map((ship) => ({
+        ...ship,
+        primaryWeapon: "plasma"
+      }))
+    };
+    storage.setItem("scrapships.profiles.v1", JSON.stringify([legacyProfile]));
+
+    const loaded = loadProfiles(storage);
+
+    expect(loaded?.[0].ships[0].primaryWeapon).toBe("bolt_cannon");
+  });
+
+  it("persists selected weapon and renamed profile", () => {
+    const storage = makeStorage();
+    const profile = {
+      ...makeProfile("profile-1"),
+      name: "Captain Scrap",
+      ships: [
+        {
+          ...makeProfile("profile-1").ships[0],
+          primaryWeapon: "laser" as const
+        }
+      ]
+    };
+
+    expect(saveProfiles([profile], storage)).toBe(true);
+
+    const loaded = loadProfiles(storage);
+    expect(loaded?.[0].name).toBe("Captain Scrap");
+    expect(loaded?.[0].ships[0].primaryWeapon).toBe("laser");
+  });
+
   it("does not overwrite existing storage with invalid profile data", () => {
     const storage = makeStorage();
     const validProfiles = [makeProfile("profile-1")];
@@ -81,6 +132,7 @@ function makeProfile(id: string): PlayerProfile {
           weapon: 5,
           turbo: 5
         },
+        primaryWeapon: "bolt_cannon",
         gadget: "turbo_burst"
       }
     ]

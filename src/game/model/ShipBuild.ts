@@ -19,6 +19,8 @@ export type HullShape = {
 
 export type GadgetType = "none" | "mine" | "repair_pulse" | "turbo_burst";
 
+export type WeaponType = "laser" | "bolt_cannon" | "rail_shot";
+
 export type ShipBuild = {
   id: string;
   name: string;
@@ -28,5 +30,6 @@ export type ShipBuild = {
   };
   hullShape: HullShape;
   attributes: ShipAttributes;
+  primaryWeapon: WeaponType;
   gadget?: GadgetType;
 };
