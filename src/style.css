@@ -175,6 +175,60 @@ canvas {
   margin-bottom: 8px;
 }
 
+.ship-preview {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.95fr) minmax(170px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  border: 1px solid #203954;
+  border-radius: 6px;
+  background: #07111c;
+  margin: 2px 0 12px;
+  padding: 10px;
+}
+
+.ship-preview-art {
+  display: grid;
+  place-items: center;
+  min-height: 170px;
+}
+
+.ship-preview-svg {
+  display: block;
+  width: 100%;
+  max-width: 248px;
+  height: 170px;
+}
+
+.ship-preview-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ship-preview-stats div {
+  border: 1px solid #203954;
+  border-radius: 6px;
+  background: #091724;
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.ship-preview-stats dt {
+  color: #adc2d9;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.ship-preview-stats dd {
+  color: #f4f8ff;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .attribute-row {
   display: grid;
   grid-template-columns: 1fr 34px 34px 34px;
@@ -247,6 +301,10 @@ canvas {
   }
 
   .visual-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ship-preview {
     grid-template-columns: 1fr;
   }
 

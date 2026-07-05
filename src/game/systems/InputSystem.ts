@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import {
   DEFAULT_PLAYER_BINDINGS,
   PLAYER_ACTIONS,
-  bindingLabels,
+  bindingLayoutLabels,
   matchesAnyBinding,
   type PlayerAction,
   type PlayerId
@@ -42,10 +42,9 @@ export class InputSystem {
 
   getDebugLines(): string[] {
     return (["p1", "p2"] as const).map((playerId) => {
-      const bindings = DEFAULT_PLAYER_BINDINGS[playerId];
       const down = PLAYER_ACTIONS.filter((action) => this.isDown(playerId, action));
       const pressedText = down.length > 0 ? down.join(", ") : "none";
-      return `${playerId.toUpperCase()} keys: ${bindingLabels(bindings.rotateLeft)} ${bindingLabels(bindings.thrust)} ${bindingLabels(bindings.rotateRight)} / ${bindingLabels(bindings.fire)} ${bindingLabels(bindings.brake)} ${bindingLabels(bindings.turbo)} | down: ${pressedText}`;
+      return `${playerId.toUpperCase()} keys: ${bindingLayoutLabels(playerId)} | down: ${pressedText}`;
     });
   }
 

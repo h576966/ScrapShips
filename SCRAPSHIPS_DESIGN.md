@@ -253,14 +253,14 @@ Mapping:
 
 | Action | Player 1 | Player 2 |
 |---|---:|---:|
-| Rotate left | Q | O |
+| Turbo / gadget | Q | Å |
 | Thrust / forward | W | P |
-| Rotate right | E | Å |
-| Fire | A | L |
+| Fire | E | O |
+| Rotate left | A | L |
 | Brake / reverse | S | Ö |
-| Turbo / gadget | D | Ä |
+| Rotate right | D | Ä |
 
-Add a key test screen or debug overlay early because shared-keyboard ghosting and Nordic key handling can vary.
+Bottom-row outer keys are used for turning so each player keeps thrust/brake in the middle column. Add a key test screen or debug overlay early because shared-keyboard ghosting and Nordic key handling can vary.
 
 ## Game modes
 

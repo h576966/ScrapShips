@@ -52,14 +52,14 @@ Default controls:
 
 | Action | Player 1 | Player 2 |
 |---|---:|---:|
-| Rotate left | Q | O |
+| Turbo / gadget | Q | Å |
 | Thrust / forward | W | P |
-| Rotate right | E | Å |
-| Fire | A | L |
+| Fire | E | O |
+| Rotate left | A | L |
 | Brake / reverse | S | Ö |
-| Turbo / gadget | D | Ä |
+| Rotate right | D | Ä |
 
-Important: Nordic keys may be browser/layout dependent. Implement controls through a key-binding config and avoid hardcoding scattered key checks. Add an input test/debug scene or overlay early.
+Important: Nordic keys may be browser/layout dependent. Implement controls through a key-binding config and avoid hardcoding scattered key checks. Bottom-row outer keys are used for turning. Add an input test/debug scene or overlay early.
 
 ## Save model constraints
 

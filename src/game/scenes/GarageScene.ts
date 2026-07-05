@@ -37,6 +37,10 @@ import type {
   WingStyle
 } from "../model";
 import {
+  getShipPreviewStatLabels,
+  renderShipPreviewSvg
+} from "../rendering/ShipVisualFactory";
+import {
   canAddShip,
   createShip,
   deleteShip,
@@ -366,6 +370,7 @@ export class GarageScene extends Phaser.Scene {
     const stats = calculateShipStats(ship);
     const visual = normalizeShipVisual(ship.visual, findHullPresetId(ship.hullShape));
     const weapon = getWeaponDefinition(ship.primaryWeapon);
+    const previewStats = getShipPreviewStatLabels(ship);
 
     return `
       <section class="garage-panel builder-panel">
@@ -390,6 +395,23 @@ export class GarageScene extends Phaser.Scene {
             Accent
             <input type="color" data-action="accent-color" value="${escapeHtml(visual.accentColor)}" />
           </label>
+        </div>
+        <div class="ship-preview">
+          <div class="ship-preview-art">
+            ${renderShipPreviewSvg(ship)}
+          </div>
+          <dl class="ship-preview-stats">
+            ${previewStats
+              .map(
+                (item) => `
+                  <div>
+                    <dt>${escapeHtml(item.label)}</dt>
+                    <dd>${escapeHtml(item.value)}</dd>
+                  </div>
+                `
+              )
+              .join("")}
+          </dl>
         </div>
         <div class="builder-block">
           <h3>Attributes</h3>

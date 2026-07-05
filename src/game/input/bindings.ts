@@ -27,22 +27,37 @@ export const DEFAULT_PLAYER_BINDINGS: Record<
   PlayerId,
   Record<PlayerAction, readonly KeyBinding[]>
 > = {
+  // Bottom-row outer keys are used for turning so each player keeps thrust/brake in the middle column.
   p1: {
-    rotateLeft: [{ label: "Q", code: "KeyQ", key: "q" }],
+    rotateLeft: [{ label: "A", code: "KeyA", key: "a" }],
     thrust: [{ label: "W", code: "KeyW", key: "w" }],
-    rotateRight: [{ label: "E", code: "KeyE", key: "e" }],
-    fire: [{ label: "A", code: "KeyA", key: "a" }],
+    rotateRight: [{ label: "D", code: "KeyD", key: "d" }],
+    fire: [{ label: "E", code: "KeyE", key: "e" }],
     brake: [{ label: "S", code: "KeyS", key: "s" }],
-    turbo: [{ label: "D", code: "KeyD", key: "d" }]
+    turbo: [{ label: "Q", code: "KeyQ", key: "q" }]
   },
   p2: {
-    rotateLeft: [{ label: "O", code: "KeyO", key: "o" }],
+    rotateLeft: [{ label: "L", code: "KeyL", key: "l" }],
     thrust: [{ label: "P", code: "KeyP", key: "p" }],
-    rotateRight: [{ label: "Å", code: "BracketLeft", key: "å" }],
-    fire: [{ label: "L", code: "KeyL", key: "l" }],
+    rotateRight: [{ label: "Ä", code: "Quote", key: "ä" }],
+    fire: [{ label: "O", code: "KeyO", key: "o" }],
     brake: [{ label: "Ö", code: "Semicolon", key: "ö" }],
-    turbo: [{ label: "Ä", code: "Quote", key: "ä" }]
+    turbo: [{ label: "Å", code: "BracketLeft", key: "å" }]
   }
+};
+
+export const DEFAULT_PLAYER_BINDING_ROWS: Record<
+  PlayerId,
+  readonly (readonly PlayerAction[])[]
+> = {
+  p1: [
+    ["turbo", "thrust", "fire"],
+    ["rotateLeft", "brake", "rotateRight"]
+  ],
+  p2: [
+    ["fire", "thrust", "turbo"],
+    ["rotateLeft", "brake", "rotateRight"]
+  ]
 };
 
 export const SYSTEM_BINDINGS = {
@@ -59,6 +74,13 @@ export function matchesAnyBinding(
 
 export function bindingLabels(bindings: readonly KeyBinding[]): string {
   return bindings.map((binding) => binding.label).join("/");
+}
+
+export function bindingLayoutLabels(playerId: PlayerId): string {
+  const bindings = DEFAULT_PLAYER_BINDINGS[playerId];
+  return DEFAULT_PLAYER_BINDING_ROWS[playerId]
+    .map((row) => row.map((action) => bindingLabels(bindings[action])).join(" "))
+    .join(" / ");
 }
 
 function matchesBinding(event: KeyboardEvent, binding: KeyBinding): boolean {

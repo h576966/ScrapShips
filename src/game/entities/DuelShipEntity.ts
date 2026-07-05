@@ -1,8 +1,7 @@
 import Phaser from "phaser";
-import { getHullVisualByPreset, type HullVisual } from "../data/hullPresets";
-import { normalizeShipVisual } from "../data/shipVisualOptions";
 import type { PlayerId } from "../input/bindings";
-import type { ShipBuild, ShipVisualCustomization } from "../model";
+import type { ShipBuild } from "../model";
+import { createShipVisualSpec } from "../rendering/ShipVisualFactory";
 import type { ShipStats } from "../services/ShipStatsCalculator";
 import type { PlayerInputState } from "../systems/InputSystem";
 import {
@@ -67,19 +66,13 @@ export class DuelShipEntity {
     this.stats = options.stats;
     this.primaryColor = colorToNumber(options.build.colors.primary);
     this.secondaryColor = colorToNumber(options.build.colors.secondary);
-    const visualStyle = normalizeShipVisual(options.build.visual);
-    this.accentColor = colorToNumber(visualStyle.accentColor);
+    const visualSpec = createShipVisualSpec(options.build, { stats: options.stats });
+    this.accentColor = colorToNumber(visualSpec.visualStyle.accentColor);
     this.hp = options.stats.maxHp;
     this.shield = options.stats.maxShield;
-    const visual = getHullVisualByPreset(visualStyle.hullPreset);
-    const visualScale = Phaser.Math.Clamp(
-      0.78 + Math.sqrt(options.stats.hullPixelCount) / 10,
-      0.92,
-      1.65
-    );
-    const noseLength = (visual.bodyHeight / 2) * visualScale;
-    const tailLength = (visual.bodyHeight / 2) * visualScale;
-    const halfWidth = (visual.bodyWidth / 2) * visualScale;
+    const noseLength = visualSpec.noseDistance;
+    const tailLength = visualSpec.tailDistance;
+    const halfWidth = visualSpec.halfWidth;
     this.muzzleDistance = noseLength + 6;
     this.flameDistance = tailLength + 9;
     this.hudOffset = noseLength + 32;
@@ -91,7 +84,7 @@ export class DuelShipEntity {
     this.shape = scene.add.polygon(
       options.spawn.x,
       options.spawn.y,
-      scalePoints(visual.points, visualScale),
+      visualSpec.bodyPoints,
       this.primaryColor
     );
     this.shape.setStrokeStyle(2, this.secondaryColor);
@@ -101,7 +94,7 @@ export class DuelShipEntity {
     this.cockpit = scene.add.polygon(
       options.spawn.x,
       options.spawn.y,
-      scalePoints(visual.cockpit, visualScale),
+      visualSpec.cockpitPoints,
       this.accentColor,
       0.92
     );
@@ -110,24 +103,18 @@ export class DuelShipEntity {
     this.stripe = scene.add.polygon(
       options.spawn.x,
       options.spawn.y,
-      scalePoints(visual.stripe, visualScale),
+      visualSpec.stripePoints,
       this.accentColor,
       0.65
     );
     this.stripe.setDepth(11);
 
-    for (const detail of createStyleDetailPolygons(
-      visual,
-      visualScale,
-      visualStyle,
-      this.secondaryColor,
-      this.accentColor
-    )) {
+    for (const detail of visualSpec.detailPolygons) {
       const shape = scene.add.polygon(
         options.spawn.x,
         options.spawn.y,
         detail.points,
-        detail.color,
+        detail.colorRole === "accent" ? this.accentColor : this.secondaryColor,
         detail.alpha
       );
       shape.setDepth(12);
@@ -439,184 +426,4 @@ export class DuelShipEntity {
 
 function colorToNumber(color: string): number {
   return Number.parseInt(color.replace("#", ""), 16);
-}
-
-function scalePoints(points: number[], scale: number): number[] {
-  return points.map((value) => value * scale);
-}
-
-type StyleDetailPolygon = {
-  points: number[];
-  color: number;
-  alpha: number;
-};
-
-function createStyleDetailPolygons(
-  visual: HullVisual,
-  scale: number,
-  style: ShipVisualCustomization,
-  secondaryColor: number,
-  accentColor: number
-): StyleDetailPolygon[] {
-  const halfWidth = visual.bodyWidth / 2;
-  const noseY = -visual.bodyHeight / 2;
-  const tailY = visual.bodyHeight / 2;
-  const details: StyleDetailPolygon[] = [];
-
-  details.push(...createNoseDetails(style.noseStyle, noseY, accentColor));
-  details.push(...createWingDetails(style.wingStyle, halfWidth, secondaryColor));
-  details.push(...createEngineDetails(style.engineStyle, halfWidth, tailY, accentColor));
-
-  return details.map((detail) => ({
-    ...detail,
-    points: scalePoints(detail.points, scale)
-  }));
-}
-
-function createNoseDetails(
-  style: ShipVisualCustomization["noseStyle"],
-  noseY: number,
-  color: number
-): StyleDetailPolygon[] {
-  if (style === "blunt") {
-    return [
-      {
-        points: [-6, noseY + 5, 6, noseY + 5, 5, noseY + 12, -5, noseY + 12],
-        color,
-        alpha: 0.75
-      }
-    ];
-  }
-
-  if (style === "split") {
-    return [
-      {
-        points: [-2, noseY + 2, -10, noseY + 13, -2, noseY + 12],
-        color,
-        alpha: 0.8
-      },
-      {
-        points: [2, noseY + 2, 10, noseY + 13, 2, noseY + 12],
-        color,
-        alpha: 0.8
-      }
-    ];
-  }
-
-  return [
-    {
-      points: [0, noseY - 1, 5, noseY + 10, -5, noseY + 10],
-      color,
-      alpha: 0.72
-    }
-  ];
-}
-
-function createWingDetails(
-  style: ShipVisualCustomization["wingStyle"],
-  halfWidth: number,
-  color: number
-): StyleDetailPolygon[] {
-  if (style === "none") {
-    return [];
-  }
-
-  const reach = style === "swept_wings" ? 16 : 8;
-  const forwardY = style === "swept_wings" ? -4 : 4;
-  const backY = style === "swept_wings" ? 20 : 16;
-  const innerY = style === "swept_wings" ? 12 : 13;
-
-  return [
-    {
-      points: [
-        halfWidth * 0.48,
-        forwardY,
-        halfWidth + reach,
-        backY,
-        halfWidth * 0.2,
-        innerY
-      ],
-      color,
-      alpha: 0.68
-    },
-    {
-      points: [
-        -halfWidth * 0.48,
-        forwardY,
-        -halfWidth - reach,
-        backY,
-        -halfWidth * 0.2,
-        innerY
-      ],
-      color,
-      alpha: 0.68
-    }
-  ];
-}
-
-function createEngineDetails(
-  style: ShipVisualCustomization["engineStyle"],
-  halfWidth: number,
-  tailY: number,
-  color: number
-): StyleDetailPolygon[] {
-  if (style === "single") {
-    return [
-      {
-        points: [-5, tailY - 4, 5, tailY - 4, 6, tailY + 3, -6, tailY + 3],
-        color,
-        alpha: 0.75
-      }
-    ];
-  }
-
-  if (style === "wide") {
-    return [
-      {
-        points: [
-          -halfWidth * 0.68,
-          tailY - 4,
-          halfWidth * 0.68,
-          tailY - 4,
-          halfWidth * 0.58,
-          tailY + 3,
-          -halfWidth * 0.58,
-          tailY + 3
-        ],
-        color,
-        alpha: 0.72
-      }
-    ];
-  }
-
-  return [
-    {
-      points: [
-        -halfWidth * 0.46,
-        tailY - 4,
-        -halfWidth * 0.16,
-        tailY - 4,
-        -halfWidth * 0.12,
-        tailY + 3,
-        -halfWidth * 0.5,
-        tailY + 3
-      ],
-      color,
-      alpha: 0.75
-    },
-    {
-      points: [
-        halfWidth * 0.16,
-        tailY - 4,
-        halfWidth * 0.46,
-        tailY - 4,
-        halfWidth * 0.5,
-        tailY + 3,
-        halfWidth * 0.12,
-        tailY + 3
-      ],
-      color,
-      alpha: 0.75
-    }
-  ];
 }
