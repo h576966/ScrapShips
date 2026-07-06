@@ -1,12 +1,16 @@
 import type { PlayerProfile, ShipBuild } from "../model";
+import { HULL_GRID_SIZE } from "../data/balance";
 import { migrateGadgetType } from "../data/gadgets";
-import { findHullPresetId } from "../data/hullPresets";
-import { normalizeShipVisual } from "../data/shipVisualOptions";
+import { findHullPresetId, getHullPreset } from "../data/hullPresets";
+import { isHullPresetId, normalizeShipVisual } from "../data/shipVisualOptions";
 import { DEFAULT_PRIMARY_WEAPON, isWeaponType } from "../data/weapons";
 import { validatePlayerProfile } from "./ProfileService";
 
 const STORAGE_KEY = "scrapships.profiles.v1";
-type SavedShipCandidate = Partial<Omit<ShipBuild, "primaryWeapon">> & {
+type SavedShipCandidate = Partial<
+  Omit<ShipBuild, "hullShape" | "primaryWeapon" | "visual">
+> & {
+  hullShape?: unknown;
   primaryWeapon?: unknown;
   gadget?: unknown;
   visual?: unknown;
@@ -71,24 +75,83 @@ function migrateProfiles(profiles: SavedProfileCandidate[]): PlayerProfile[] {
 }
 
 function migrateShip(ship: SavedShipCandidate): SavedShipCandidate {
-  const fallbackHullPreset =
-    ship.hullShape && typeof ship.hullShape === "object"
-      ? findHullPresetId(ship.hullShape)
-      : undefined;
+  const rawVisual = isObjectRecord(ship.visual) ? ship.visual : undefined;
+  const fallbackHullPreset = getFallbackHullPreset(rawVisual, ship.hullShape);
+  const visual = normalizeShipVisual(rawVisual, fallbackHullPreset);
 
   return {
     ...ship,
+    hullShape: migrateHullShape(ship.hullShape, visual.hullPreset),
     primaryWeapon: isWeaponType(ship.primaryWeapon)
       ? ship.primaryWeapon
       : DEFAULT_PRIMARY_WEAPON,
     gadget: migrateGadgetType(ship.gadget),
-    visual: normalizeShipVisual(
-      isObjectRecord(ship.visual) ? ship.visual : undefined,
-      fallbackHullPreset
-    )
+    visual
   };
 }
 
 function isObjectRecord(value: unknown): value is Partial<ShipBuild["visual"]> {
   return typeof value === "object" && value !== null;
+}
+
+function getFallbackHullPreset(
+  visual: Partial<ShipBuild["visual"]> | undefined,
+  hullShape: unknown
+) {
+  if (isHullPresetId(visual?.hullPreset)) {
+    return visual.hullPreset;
+  }
+
+  return isHullShapeRecord(hullShape) ? findHullPresetId(hullShape) : undefined;
+}
+
+function migrateHullShape(
+  hullShape: unknown,
+  presetId: ShipBuild["visual"]["hullPreset"]
+) {
+  if (isValidHullShape(hullShape)) {
+    return {
+      gridSize: HULL_GRID_SIZE,
+      pixels: hullShape.pixels.map((pixel) => ({ x: pixel.x, y: pixel.y }))
+    };
+  }
+
+  return getHullPreset(presetId);
+}
+
+function isHullShapeRecord(value: unknown): value is ShipBuild["hullShape"] {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "gridSize" in value &&
+    "pixels" in value &&
+    Array.isArray((value as { pixels?: unknown }).pixels)
+  );
+}
+
+function isValidHullShape(value: unknown): value is ShipBuild["hullShape"] {
+  if (!isHullShapeRecord(value) || value.gridSize !== HULL_GRID_SIZE) {
+    return false;
+  }
+
+  return value.pixels.length > 0 && value.pixels.every(isValidHullPixel);
+}
+
+function isValidHullPixel(pixel: unknown): pixel is { x: number; y: number } {
+  if (typeof pixel !== "object" || pixel === null) {
+    return false;
+  }
+
+  const candidate = pixel as { x?: unknown; y?: unknown };
+  const { x, y } = candidate;
+  return (
+    typeof x === "number" &&
+    typeof y === "number" &&
+    Number.isInteger(x) &&
+    Number.isInteger(y) &&
+    x >= 0 &&
+    x < HULL_GRID_SIZE &&
+    y >= 0 &&
+    y < HULL_GRID_SIZE
+  );
 }

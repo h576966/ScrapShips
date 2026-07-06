@@ -23,7 +23,9 @@ import {
 } from "../data/weapons";
 import {
   HULL_PRESETS,
-  findHullPresetId
+  findHullPresetId,
+  formatModifierValue,
+  getHullModifierSummary
 } from "../data/hullPresets";
 import type {
   EngineStyle,
@@ -59,7 +61,10 @@ import {
   type ProfileEditResult
 } from "../services/ProfileService";
 import { loadProfiles, saveProfiles } from "../services/SaveService";
-import { calculateShipStats } from "../services/ShipStatsCalculator";
+import {
+  calculateShipStats,
+  getHullAttributeModifierForShip
+} from "../services/ShipStatsCalculator";
 import { getAttributeTotal } from "../services/ShipValidator";
 import { escapeHtml, renderSelectOptions } from "../ui/html";
 
@@ -413,57 +418,23 @@ export class GarageScene extends Phaser.Scene {
               .join("")}
           </dl>
         </div>
-        <div class="builder-block">
-          <h3>Attributes</h3>
-          ${SHIP_ATTRIBUTE_KEYS.map((attribute) =>
-            this.renderAttributeRow(this.editingSlot, ship.attributes, attribute)
-          ).join("")}
-        </div>
-        <label class="field-label">
-          Primary weapon
-          <select data-action="primary-weapon">
-            ${renderSelectOptions(
-              WEAPON_DEFINITIONS.map((candidate) => ({
-                value: candidate.type,
-                label: candidate.label
-              })),
-              ship.primaryWeapon
-            )}
-          </select>
-        </label>
-        <div class="weapon-summary">
-          Range ${weapon.range} | ${weapon.mode === "continuous" ? `${weapon.baseDamage} DPS` : `${weapon.baseDamage} dmg`}
-          | ${weapon.cooldownMs > 0 ? `${Math.round(1000 / weapon.cooldownMs)} shots/sec` : "hold beam"}
-          | ${escapeHtml(weapon.difficulty)}
-        </div>
-        <label class="field-label">
-          Gadget
-          <select data-action="gadget">
-            ${renderSelectOptions(
-              GADGET_OPTIONS.map((gadget) => ({
-                value: gadget.value,
-                label: gadget.label
-              })),
-              ship.gadget ?? "none"
-            )}
-          </select>
-        </label>
-        <div class="builder-block">
-          <h3>Hull Shape</h3>
-          <div class="button-row">
+        <div class="builder-section design-section">
+          <div class="section-heading">
+            <h3>Shape & Silhouette</h3>
+            <span>Hull trade-off and profile</span>
+          </div>
+          <div class="hull-option-grid">
             ${HULL_PRESETS.map(
               (preset) => `
                 <button type="button" data-action="hull-preset" data-slot="${this.editingSlot}"
                   data-preset="${preset.id}" class="${visual.hullPreset === preset.id ? "active" : ""}">
-                  ${preset.label}
+                  <strong>${preset.label}</strong>
+                  <small>${escapeHtml(getHullModifierSummary(preset.id))}</small>
                 </button>
               `
             ).join("")}
           </div>
-        </div>
-        <div class="builder-block">
-          <h3>Silhouette</h3>
-          <div class="visual-grid">
+          <div class="visual-grid silhouette-controls">
             <label class="field-label">
               Nose
               <select data-action="nose-style">
@@ -484,6 +455,52 @@ export class GarageScene extends Phaser.Scene {
             </label>
           </div>
         </div>
+        <div class="builder-section">
+          <div class="section-heading">
+            <h3>Attributes</h3>
+            <span>${total}/${ATTRIBUTE_TOTAL_MAX} base points</span>
+          </div>
+          ${SHIP_ATTRIBUTE_KEYS.map((attribute) =>
+            this.renderAttributeRow(this.editingSlot, ship, attribute)
+          ).join("")}
+        </div>
+        <div class="builder-section">
+          <div class="section-heading">
+            <h3>Loadout</h3>
+            <span>Primary and gadget</span>
+          </div>
+          <div class="loadout-grid">
+            <label class="field-label">
+              Primary weapon
+              <select data-action="primary-weapon">
+                ${renderSelectOptions(
+                  WEAPON_DEFINITIONS.map((candidate) => ({
+                    value: candidate.type,
+                    label: candidate.label
+                  })),
+                  ship.primaryWeapon
+                )}
+              </select>
+            </label>
+            <label class="field-label">
+              Gadget
+              <select data-action="gadget">
+                ${renderSelectOptions(
+                  GADGET_OPTIONS.map((gadget) => ({
+                    value: gadget.value,
+                    label: gadget.label
+                  })),
+                  ship.gadget ?? "none"
+                )}
+              </select>
+            </label>
+          </div>
+          <div class="weapon-summary">
+            Range ${weapon.range} | ${weapon.mode === "continuous" ? `${weapon.baseDamage} DPS` : `${weapon.baseDamage} dmg`}
+            | ${weapon.cooldownMs > 0 ? `${Math.round(1000 / weapon.cooldownMs)} shots/sec` : "hold beam"}
+            | ${escapeHtml(weapon.difficulty)}
+          </div>
+        </div>
         <div class="stats-line">
           Hull pixels ${ship.hullShape.pixels.length} | mass ${stats.mass} |
           speed ${stats.maxSpeed} | turn ${stats.turnRate}
@@ -494,17 +511,23 @@ export class GarageScene extends Phaser.Scene {
 
   private renderAttributeRow(
     slot: PlayerSlot,
-    attributes: ShipAttributes,
+    ship: ShipBuild,
     attribute: keyof ShipAttributes
   ): string {
+    const attributes = ship.attributes;
     const value = attributes[attribute];
     const total = getAttributeTotal(attributes);
+    const modifier = getHullAttributeModifierForShip(ship)[attribute] ?? 0;
+    const modifierText =
+      modifier === 0
+        ? ""
+        : ` <small>(${formatModifierValue(modifier)} hull shape)</small>`;
     return `
       <div class="attribute-row">
         <span>${attribute}</span>
         <button type="button" data-action="attribute" data-slot="${slot}"
           data-attribute="${attribute}" data-delta="-1" ${value <= 0 ? "disabled" : ""}>-</button>
-        <strong>${value}</strong>
+        <strong>${value}${modifierText}</strong>
         <button type="button" data-action="attribute" data-slot="${slot}"
           data-attribute="${attribute}" data-delta="1" ${
             value >= ATTRIBUTE_VALUE_MAX || total >= ATTRIBUTE_TOTAL_MAX ? "disabled" : ""

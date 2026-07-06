@@ -33,7 +33,7 @@ Nordic keys can vary by browser/layout; bindings live in `src/game/input/binding
 - Main Menu -> Garage -> Duel flow.
 - Two local profiles with saved ships in `localStorage`.
 - Create, duplicate, rename, delete except last ship, and cap at 5 ships per profile.
-- Ship builder for colors, attributes, hull preset, primary weapon, gadget, and generated visual details.
+- Ship builder for colors, base attributes, 17x17 centered hull presets, primary weapon, gadget, and generated pixel-cell visual details.
 - Primary weapons:
   - Laser: short-range continuous beam.
   - Bolt Cannon: medium-range all-round projectile.
@@ -46,9 +46,10 @@ Nordic keys can vary by browser/layout; bindings live in `src/game/input/binding
 ## Code Shape
 
 - Ship/profile model and validation live under `src/game/model` and `src/game/services`.
-- Derived movement, HP, shield, mass, and turbo stats live in `ShipStatsCalculator`.
+- Derived movement, HP, shield, mass, effective hull-modified attributes, and turbo stats live in `ShipStatsCalculator`.
 - Weapon projectile damage, speed, cooldown, range, and lifetime live in `src/game/data/weapons.ts` and `WeaponSystem`.
 - Phaser-facing duel responsibilities are split between `DuelScene`, `DuelCombatSystem`, `ArenaObjectSystem`, `DuelEffects`, and entity classes.
+- In dev builds, press `H` in Duel to inspect ship body bounds, center, muzzle point, and weapon hit radius.
 
 ## Non-Goals For Now
 

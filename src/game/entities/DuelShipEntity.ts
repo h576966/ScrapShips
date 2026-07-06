@@ -1,8 +1,17 @@
 import Phaser from "phaser";
+import { HULL_CENTER_INDEX } from "../data/balance";
 import type { PlayerId } from "../input/bindings";
-import type { ShipBuild } from "../model";
-import { createShipVisualSpec } from "../rendering/ShipVisualFactory";
-import type { ShipStats } from "../services/ShipStatsCalculator";
+import type { ShipAttributes, ShipBuild } from "../model";
+import {
+  calculateShipHitRadius,
+  createShipVisualSpec,
+  type ShipVisualCell,
+  type ShipVisualSpec
+} from "../rendering/ShipVisualFactory";
+import {
+  getEffectiveShipAttributes,
+  type ShipStats
+} from "../services/ShipStatsCalculator";
 import type { PlayerInputState } from "../systems/InputSystem";
 import {
   applyCorrosiveDamageOverTime,
@@ -33,12 +42,12 @@ export class DuelShipEntity {
   readonly playerId: PlayerId;
   readonly build: ShipBuild;
   readonly stats: ShipStats;
-  readonly shape: Phaser.GameObjects.Polygon;
+  readonly effectiveAttributes: ShipAttributes;
+  readonly shape: Phaser.GameObjects.Rectangle;
 
   private readonly boostFlame: Phaser.GameObjects.Triangle;
-  private readonly cockpit: Phaser.GameObjects.Polygon;
-  private readonly stripe: Phaser.GameObjects.Polygon;
-  private readonly detailShapes: Phaser.GameObjects.Polygon[] = [];
+  private readonly visualSpec: ShipVisualSpec;
+  private readonly visualCellShapes: Phaser.GameObjects.Rectangle[] = [];
   private readonly nameLabel: Phaser.GameObjects.Text;
   private readonly hpBarBack: Phaser.GameObjects.Rectangle;
   private readonly hpBar: Phaser.GameObjects.Rectangle;
@@ -49,6 +58,7 @@ export class DuelShipEntity {
   private readonly muzzleDistance: number;
   private readonly flameDistance: number;
   private readonly hudOffset: number;
+  private readonly hitRadius: number;
   private hitFlashUntil = 0;
   private effects: ShipEffectState = createEmptyShipEffects();
 
@@ -64,68 +74,57 @@ export class DuelShipEntity {
     this.playerId = options.playerId;
     this.build = options.build;
     this.stats = options.stats;
+    this.effectiveAttributes = getEffectiveShipAttributes(options.build);
     this.primaryColor = colorToNumber(options.build.colors.primary);
     this.secondaryColor = colorToNumber(options.build.colors.secondary);
-    const visualSpec = createShipVisualSpec(options.build, { stats: options.stats });
-    this.accentColor = colorToNumber(visualSpec.visualStyle.accentColor);
+    this.visualSpec = createShipVisualSpec(options.build, { stats: options.stats });
+    this.accentColor = colorToNumber(this.visualSpec.visualStyle.accentColor);
     this.hp = options.stats.maxHp;
     this.shield = options.stats.maxShield;
-    const noseLength = visualSpec.noseDistance;
-    const tailLength = visualSpec.tailDistance;
-    const halfWidth = visualSpec.halfWidth;
-    this.muzzleDistance = noseLength + 6;
+    const noseLength = this.visualSpec.noseDistance;
+    const tailLength = this.visualSpec.tailDistance;
+    this.muzzleDistance = this.visualSpec.muzzleDistance;
     this.flameDistance = tailLength + 9;
     this.hudOffset = noseLength + 32;
+    this.hitRadius = calculateShipHitRadius({
+      width: this.visualSpec.bodyWidth,
+      height: this.visualSpec.bodyHeight
+    });
 
     this.boostFlame = scene.add.triangle(0, 0, 0, 12, -7, -7, 7, -7, 0xffc44d);
     this.boostFlame.setBlendMode(Phaser.BlendModes.ADD);
     this.boostFlame.setDepth(5);
 
-    this.shape = scene.add.polygon(
+    this.shape = scene.add.rectangle(
       options.spawn.x,
       options.spawn.y,
-      visualSpec.bodyPoints,
-      this.primaryColor
+      this.visualSpec.bodyWidth,
+      this.visualSpec.bodyHeight,
+      0xffffff,
+      0
     );
-    this.shape.setStrokeStyle(2, this.secondaryColor);
     this.shape.setDepth(10);
     scene.physics.add.existing(this.shape);
 
-    this.cockpit = scene.add.polygon(
-      options.spawn.x,
-      options.spawn.y,
-      visualSpec.cockpitPoints,
-      this.accentColor,
-      0.92
-    );
-    this.cockpit.setDepth(11);
-
-    this.stripe = scene.add.polygon(
-      options.spawn.x,
-      options.spawn.y,
-      visualSpec.stripePoints,
-      this.accentColor,
-      0.65
-    );
-    this.stripe.setDepth(11);
-
-    for (const detail of visualSpec.detailPolygons) {
-      const shape = scene.add.polygon(
+    for (const cell of this.visualSpec.visualCells) {
+      const cellShape = scene.add.rectangle(
         options.spawn.x,
         options.spawn.y,
-        detail.points,
-        detail.colorRole === "accent" ? this.accentColor : this.secondaryColor,
-        detail.alpha
+        this.visualSpec.cellSize + 0.25,
+        this.visualSpec.cellSize + 0.25,
+        this.getCellColor(cell),
+        cell.alpha
       );
-      shape.setDepth(12);
-      this.detailShapes.push(shape);
+      cellShape.setStrokeStyle(0.7, 0x050910, 0.62);
+      cellShape.setDepth(cell.role === "primary" ? 10 : 11);
+      this.visualCellShapes.push(cellShape);
     }
 
     const body = this.body;
     body.setAllowGravity(false);
     body.setCollideWorldBounds(true);
     body.setBounce(0.9, 0.9);
-    body.setSize(halfWidth * 2, noseLength + tailLength);
+    body.setSize(this.visualSpec.bodyWidth, this.visualSpec.bodyHeight);
     body.setMaxVelocity(options.stats.turboMaxSpeed);
 
     this.nameLabel = scene.add.text(0, 0, options.label, {
@@ -168,16 +167,15 @@ export class DuelShipEntity {
     this.hitFlashUntil = 0;
     this.effects = createEmptyShipEffects();
     this.shape.setActive(true).setVisible(true);
-    this.cockpit.setVisible(true);
-    this.stripe.setVisible(true);
-    for (const detail of this.detailShapes) {
-      detail.setVisible(true);
+    for (const cell of this.visualCellShapes) {
+      cell.setVisible(true);
     }
     this.boostFlame.setVisible(false);
     this.body.enable = true;
     this.body.reset(x, y);
     this.body.setVelocity(0, 0);
     this.shape.setRotation(rotation);
+    this.updateCellStyles(false, false);
     this.updateHullDetails();
     this.updateHud();
   }
@@ -198,11 +196,7 @@ export class DuelShipEntity {
     }
 
     const flash = time < this.hitFlashUntil;
-    this.shape.setFillStyle(flash ? 0xffffff : this.primaryColor);
-    this.shape.setStrokeStyle(
-      2,
-      getSpeedMultiplier(this.effects, time) > 1 ? 0x7dd3ff : this.secondaryColor
-    );
+    this.updateCellStyles(flash, getSpeedMultiplier(this.effects, time) > 1);
     this.updateHullDetails();
     this.updateBoostFlame(input.thrust || input.turbo);
     this.updateHud();
@@ -295,16 +289,39 @@ export class DuelShipEntity {
   }
 
   getHitRadius(): number {
-    return Math.max(this.body.width, this.body.height) * 0.52;
+    return this.hitRadius;
+  }
+
+  getHitboxDebugSnapshot(): {
+    bodyX: number;
+    bodyY: number;
+    bodyWidth: number;
+    bodyHeight: number;
+    hitRadius: number;
+    centerX: number;
+    centerY: number;
+    muzzleX: number;
+    muzzleY: number;
+  } {
+    const muzzle = this.getMuzzlePosition();
+    return {
+      bodyX: this.body.x,
+      bodyY: this.body.y,
+      bodyWidth: this.body.width,
+      bodyHeight: this.body.height,
+      hitRadius: this.hitRadius,
+      centerX: this.shape.x,
+      centerY: this.shape.y,
+      muzzleX: muzzle.x,
+      muzzleY: muzzle.y
+    };
   }
 
   destroy(): void {
     this.shape.destroy();
     this.boostFlame.destroy();
-    this.cockpit.destroy();
-    this.stripe.destroy();
-    for (const detail of this.detailShapes) {
-      detail.destroy();
+    for (const cell of this.visualCellShapes) {
+      cell.destroy();
     }
     this.nameLabel.destroy();
     this.hpBarBack.destroy();
@@ -361,10 +378,8 @@ export class DuelShipEntity {
 
     this.body.enable = false;
     this.shape.setVisible(false);
-    this.cockpit.setVisible(false);
-    this.stripe.setVisible(false);
-    for (const detail of this.detailShapes) {
-      detail.setVisible(false);
+    for (const cell of this.visualCellShapes) {
+      cell.setVisible(false);
     }
     this.boostFlame.setVisible(false);
   }
@@ -387,17 +402,40 @@ export class DuelShipEntity {
 
   private updateHullDetails(): void {
     const visible = this.alive;
-    this.cockpit.setPosition(this.shape.x, this.shape.y);
-    this.cockpit.setRotation(this.shape.rotation);
-    this.cockpit.setVisible(visible);
-    this.stripe.setPosition(this.shape.x, this.shape.y);
-    this.stripe.setRotation(this.shape.rotation);
-    this.stripe.setVisible(visible);
-    for (const detail of this.detailShapes) {
-      detail.setPosition(this.shape.x, this.shape.y);
-      detail.setRotation(this.shape.rotation);
-      detail.setVisible(visible);
+    this.visualSpec.visualCells.forEach((cell, index) => {
+      const cellShape = this.visualCellShapes[index];
+      const local = this.getCellLocalOffset(cell);
+      const rotated = rotatePoint(local.x, local.y, this.shape.rotation);
+      cellShape.setPosition(this.shape.x + rotated.x, this.shape.y + rotated.y);
+      cellShape.setRotation(this.shape.rotation);
+      cellShape.setVisible(visible);
+    });
+  }
+
+  private updateCellStyles(flash: boolean, boosted: boolean): void {
+    const strokeColor = boosted ? 0x7dd3ff : 0x050910;
+    this.visualSpec.visualCells.forEach((cell, index) => {
+      const shape = this.visualCellShapes[index];
+      shape.setFillStyle(flash ? 0xffffff : this.getCellColor(cell), cell.alpha);
+      shape.setStrokeStyle(0.7, strokeColor, boosted ? 0.85 : 0.62);
+    });
+  }
+
+  private getCellLocalOffset(cell: ShipVisualCell): { x: number; y: number } {
+    return {
+      x: (cell.x - HULL_CENTER_INDEX) * this.visualSpec.cellSize,
+      y: (cell.y - HULL_CENTER_INDEX) * this.visualSpec.cellSize
+    };
+  }
+
+  private getCellColor(cell: ShipVisualCell): number {
+    if (cell.role === "accent") {
+      return this.accentColor;
     }
+    if (cell.role === "secondary") {
+      return this.secondaryColor;
+    }
+    return this.primaryColor;
   }
 
   private updateHud(): void {
@@ -426,4 +464,17 @@ export class DuelShipEntity {
 
 function colorToNumber(color: string): number {
   return Number.parseInt(color.replace("#", ""), 16);
+}
+
+function rotatePoint(
+  x: number,
+  y: number,
+  rotation: number
+): { x: number; y: number } {
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  return {
+    x: x * cos - y * sin,
+    y: x * sin + y * cos
+  };
 }

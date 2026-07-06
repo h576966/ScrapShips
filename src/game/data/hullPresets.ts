@@ -1,18 +1,19 @@
-import type { HullPresetId, HullShape } from "../model";
+import { HULL_GRID_SIZE, SHIP_ATTRIBUTE_KEYS } from "./balance";
+import type { HullPresetId, HullShape, ShipAttributes } from "../model";
+
+export type HullAttributeModifier = Partial<Record<keyof ShipAttributes, number>>;
 
 export type HullPreset = {
   id: HullPresetId;
   label: string;
   hullShape: HullShape;
-  visual: HullVisual;
+  modifier: HullAttributeModifier;
 };
 
-export type HullVisual = {
-  points: number[];
-  cockpit: number[];
-  stripe: number[];
-  bodyWidth: number;
-  bodyHeight: number;
+type HullSegment = {
+  y: number;
+  from: number;
+  to: number;
 };
 
 export const HULL_PRESETS: readonly HullPreset[] = [
@@ -20,57 +21,50 @@ export const HULL_PRESETS: readonly HullPreset[] = [
     id: "scrapper",
     label: "Scrapper",
     hullShape: makeScrapperHull(),
-    visual: {
-      points: [0, -22, 17, 14, 7, 21, 0, 15, -7, 21, -17, 14],
-      cockpit: [0, -10, 6, 3, -6, 3],
-      stripe: [-8, 11, 0, 16, 8, 11],
-      bodyWidth: 34,
-      bodyHeight: 43
-    }
+    modifier: { weapon: 1, turbo: -1 }
   },
   {
     id: "needle",
     label: "Needle",
     hullShape: makeNeedleHull(),
-    visual: {
-      points: [0, -28, 10, 18, 0, 24, -10, 18],
-      cockpit: [0, -14, 4, 0, -4, 0],
-      stripe: [-4, 9, 0, 17, 4, 9],
-      bodyWidth: 22,
-      bodyHeight: 52
-    }
+    modifier: { speed: 1, hull: -1 }
   },
   {
     id: "bulwark",
     label: "Bulwark",
     hullShape: makeBulwarkHull(),
-    visual: {
-      points: [0, -21, 24, 2, 21, 22, 8, 18, 0, 24, -8, 18, -21, 22, -24, 2],
-      cockpit: [0, -9, 8, 5, -8, 5],
-      stripe: [-15, 13, 0, 20, 15, 13],
-      bodyWidth: 48,
-      bodyHeight: 45
-    }
+    modifier: { hull: 1, turning: -1 }
   },
   {
     id: "raider",
     label: "Raider",
     hullShape: makeRaiderHull(),
-    visual: {
-      points: [0, -24, 19, 13, 9, 11, 14, 24, 0, 16, -14, 24, -9, 11, -19, 13],
-      cockpit: [0, -11, 6, 2, -6, 2],
-      stripe: [-10, 11, 0, 16, 10, 11],
-      bodyWidth: 38,
-      bodyHeight: 48
-    }
+    modifier: { turbo: 1, shield: -1 }
   }
 ];
 
 export function getHullPreset(id: HullPresetId): HullShape {
-  return cloneHull(
-    HULL_PRESETS.find((preset) => preset.id === id)?.hullShape ??
-      HULL_PRESETS[0].hullShape
-  );
+  return cloneHull(getHullPresetDefinition(id).hullShape);
+}
+
+export function getHullPresetDefinition(id: HullPresetId): HullPreset {
+  return HULL_PRESETS.find((preset) => preset.id === id) ?? HULL_PRESETS[0];
+}
+
+export function getHullPresetModifier(id: HullPresetId): HullAttributeModifier {
+  return { ...getHullPresetDefinition(id).modifier };
+}
+
+export function getHullModifierSummary(id: HullPresetId): string {
+  const modifier = getHullPresetModifier(id);
+  return SHIP_ATTRIBUTE_KEYS.flatMap((attribute) => {
+    const value = modifier[attribute] ?? 0;
+    return value === 0 ? [] : `${capitalize(attribute)} ${formatModifierValue(value)}`;
+  }).join(", ");
+}
+
+export function formatModifierValue(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
 }
 
 export function findHullPresetId(hullShape: HullShape): HullPresetId | undefined {
@@ -78,89 +72,133 @@ export function findHullPresetId(hullShape: HullShape): HullPresetId | undefined
   return HULL_PRESETS.find((preset) => pixelKey(preset.hullShape) === target)?.id;
 }
 
-export function getHullVisual(hullShape: HullShape): HullVisual {
-  return (
-    HULL_PRESETS.find((preset) => preset.id === findHullPresetId(hullShape))?.visual ??
-    HULL_PRESETS[0].visual
-  );
-}
-
-export function getHullVisualByPreset(id: HullPresetId): HullVisual {
-  return HULL_PRESETS.find((preset) => preset.id === id)?.visual ?? HULL_PRESETS[0].visual;
-}
-
 export function makeScrapperHull(): HullShape {
-  const pixels = [];
-  const center = 7.5;
-
-  for (let y = 2; y <= 13; y += 1) {
-    for (let x = 3; x <= 12; x += 1) {
-      if (Math.abs(x - center) + Math.abs(y - center) <= 5.5) {
-        pixels.push({ x, y });
-      }
-    }
-  }
-
-  return { gridSize: 16, pixels };
+  return makeHullFromSegments([
+    segment(1, 8, 8),
+    segment(2, 7, 9),
+    segment(3, 6, 10),
+    segment(4, 5, 11),
+    segment(5, 4, 12),
+    segment(6, 4, 12),
+    segment(7, 3, 13),
+    segment(8, 4, 12),
+    segment(9, 4, 12),
+    segment(10, 5, 11),
+    segment(11, 4, 6),
+    segment(11, 8, 8),
+    segment(11, 10, 12),
+    segment(12, 5, 11),
+    segment(13, 6, 7),
+    segment(13, 9, 10)
+  ]);
 }
 
 export function makeNeedleHull(): HullShape {
-  const pixels = [];
-
-  for (let y = 1; y <= 14; y += 1) {
-    const halfWidth = y < 9 ? Math.max(1, Math.floor(y / 3)) : 2;
-    for (let x = 8 - halfWidth; x <= 7 + halfWidth; x += 1) {
-      pixels.push({ x, y });
-    }
-  }
-
-  return { gridSize: 16, pixels };
+  return makeHullFromSegments([
+    segment(0, 8, 8),
+    segment(1, 8, 8),
+    segment(2, 7, 9),
+    segment(3, 7, 9),
+    segment(4, 7, 9),
+    segment(5, 7, 9),
+    segment(6, 6, 10),
+    segment(7, 7, 9),
+    segment(8, 7, 9),
+    segment(9, 7, 9),
+    segment(10, 7, 9),
+    segment(11, 6, 10),
+    segment(12, 7, 9),
+    segment(13, 7, 9),
+    segment(14, 7, 9),
+    segment(15, 6, 7),
+    segment(15, 9, 10)
+  ]);
 }
 
 export function makeBulwarkHull(): HullShape {
-  return makeRectHull(2, 3, 12, 11);
+  return makeHullFromSegments([
+    segment(1, 8, 8),
+    segment(2, 6, 10),
+    segment(3, 4, 12),
+    segment(4, 3, 13),
+    segment(5, 2, 14),
+    segment(6, 2, 14),
+    segment(7, 1, 15),
+    segment(8, 1, 15),
+    segment(9, 2, 14),
+    segment(10, 2, 14),
+    segment(11, 3, 13),
+    segment(12, 4, 12),
+    segment(13, 5, 11),
+    segment(14, 3, 5),
+    segment(14, 7, 9),
+    segment(14, 11, 13),
+    segment(15, 4, 5),
+    segment(15, 11, 12)
+  ]);
 }
 
 export function makeRaiderHull(): HullShape {
-  const pixels = [];
-
-  for (let y = 2; y <= 14; y += 1) {
-    const halfWidth = y < 8 ? y - 1 : Math.max(4, 15 - y);
-    for (let x = 8 - halfWidth; x <= 7 + halfWidth; x += 1) {
-      if (y < 10 || x < 7 || x > 8 || y > 12) {
-        pixels.push({ x, y });
-      }
-    }
-  }
-
-  return { gridSize: 16, pixels };
+  return makeHullFromSegments([
+    segment(1, 8, 8),
+    segment(2, 7, 9),
+    segment(3, 6, 10),
+    segment(4, 5, 11),
+    segment(5, 4, 12),
+    segment(6, 3, 13),
+    segment(7, 2, 14),
+    segment(8, 1, 15),
+    segment(9, 0, 16),
+    segment(10, 4, 12),
+    segment(11, 5, 11),
+    segment(12, 4, 6),
+    segment(12, 8, 8),
+    segment(12, 10, 12),
+    segment(13, 3, 5),
+    segment(13, 11, 13),
+    segment(14, 2, 4),
+    segment(14, 12, 14),
+    segment(15, 1, 2),
+    segment(15, 14, 15)
+  ]);
 }
 
 export const makeDiamondHull = makeScrapperHull;
 export const makeArrowHull = makeRaiderHull;
 
-function makeRectHull(xStart: number, yStart: number, width: number, height: number): HullShape {
-  const pixels = [];
+function segment(y: number, from: number, to: number): HullSegment {
+  return { y, from, to };
+}
 
-  for (let y = yStart; y < yStart + height; y += 1) {
-    for (let x = xStart; x < xStart + width; x += 1) {
-      pixels.push({ x, y });
+function makeHullFromSegments(segments: readonly HullSegment[]): HullShape {
+  const pixels = new Map<string, { x: number; y: number }>();
+
+  for (const { y, from, to } of segments) {
+    for (let x = from; x <= to; x += 1) {
+      pixels.set(`${x}:${y}`, { x, y });
     }
   }
 
-  return { gridSize: 16, pixels };
+  return {
+    gridSize: HULL_GRID_SIZE,
+    pixels: Array.from(pixels.values()).sort((a, b) => a.y - b.y || a.x - b.x)
+  };
 }
 
 function cloneHull(hullShape: HullShape): HullShape {
   return {
-    gridSize: 16,
+    gridSize: HULL_GRID_SIZE,
     pixels: hullShape.pixels.map((pixel) => ({ ...pixel }))
   };
 }
 
 function pixelKey(hullShape: HullShape): string {
-  return hullShape.pixels
+  return `${hullShape.gridSize}|${hullShape.pixels
     .map((pixel) => `${pixel.x}:${pixel.y}`)
     .sort()
-    .join("|");
+    .join("|")}`;
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -62,7 +62,8 @@ export const DEFAULT_PLAYER_BINDING_ROWS: Record<
 
 export const SYSTEM_BINDINGS = {
   restartRound: [{ label: "R", code: "KeyR", key: "r" }],
-  returnToGarage: [{ label: "G", code: "KeyG", key: "g" }]
+  returnToGarage: [{ label: "G", code: "KeyG", key: "g" }],
+  toggleHitboxDebug: [{ label: "H", code: "KeyH", key: "h" }]
 } as const;
 
 export function matchesAnyBinding(

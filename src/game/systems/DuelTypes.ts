@@ -14,6 +14,17 @@ export type ShipDebugSnapshot = {
   weapon: string;
   x: number;
   y: number;
+  hitbox: {
+    bodyX: number;
+    bodyY: number;
+    bodyWidth: number;
+    bodyHeight: number;
+    hitRadius: number;
+    centerX: number;
+    centerY: number;
+    muzzleX: number;
+    muzzleY: number;
+  };
   velocityX: number;
   velocityY: number;
   speedBoostActive: boolean;
@@ -70,6 +81,7 @@ export type DuelDebugApi = {
   setShipVelocity: (playerId: PlayerId, x: number, y: number) => void;
   setShipWeapon: (playerId: PlayerId, weapon: WeaponType) => void;
   setShipGadget: (playerId: PlayerId, gadget: GadgetType) => void;
+  setHitboxDebugVisible: (visible: boolean) => void;
   placeMine: (playerId: PlayerId) => boolean;
   damageShip: (playerId: PlayerId, amount: number) => void;
   setAsteroidPose: (id: string, x: number, y: number) => void;

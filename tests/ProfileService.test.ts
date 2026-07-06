@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getHullPreset } from "../src/game/data/hullPresets";
 import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { PlayerProfile, ShipBuild } from "../src/game/model";
 import {
@@ -222,15 +223,7 @@ function makeShip(id: string): ShipBuild {
       primary: "#ffffff",
       secondary: "#88ccff"
     },
-    hullShape: {
-      gridSize: 16,
-      pixels: [
-        { x: 7, y: 7 },
-        { x: 8, y: 7 },
-        { x: 7, y: 8 },
-        { x: 8, y: 8 }
-      ]
-    },
+    hullShape: getHullPreset("scrapper"),
     attributes: {
       speed: 5,
       turning: 5,

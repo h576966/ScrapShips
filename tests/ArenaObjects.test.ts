@@ -24,6 +24,7 @@ import {
   hasCorrosiveAmmo,
   tickDamageOverTime
 } from "../src/game/systems/PickupSystem";
+import { createAsteroidVisualSpec } from "../src/game/rendering/AsteroidVisualFactory";
 
 describe("arena objects", () => {
   it("uses a duel arena larger than the viewport", () => {
@@ -43,6 +44,19 @@ describe("arena objects", () => {
       expect(asteroid.maxHp).toBeGreaterThan(0);
       expect(asteroid.knockback).toBeGreaterThan(0);
     }
+  });
+
+  it("generates varied asteroid visuals with highlight and surface pits", () => {
+    const small = createAsteroidVisualSpec(28, "small-rock");
+    const large = createAsteroidVisualSpec(48, "large-rock");
+
+    expect(small.points.length / 2).toBeGreaterThanOrEqual(9);
+    expect(small.points.length / 2).toBeLessThanOrEqual(14);
+    expect(small.highlightPoints.length).toBe(small.points.length);
+    expect(small.shadowPoints.length).toBe(small.points.length);
+    expect(small.pits.length).toBeGreaterThanOrEqual(2);
+    expect(large.points).not.toEqual(small.points);
+    expect(Math.abs(small.rotationSpeed)).toBeGreaterThan(0);
   });
 
   it("bounds asteroid collision damage around 5 to 10", () => {

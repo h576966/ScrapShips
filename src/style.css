@@ -24,7 +24,7 @@ canvas {
   inset: 0;
   z-index: 5;
   overflow: auto;
-  background: #07111c;
+  background: linear-gradient(180deg, #081321 0%, #050b13 100%);
   color: #e8f4ff;
 }
 
@@ -85,6 +85,15 @@ canvas {
   flex-wrap: wrap;
 }
 
+.button-row button small {
+  display: block;
+  color: #9fb6d0;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
 .garage-grid {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) minmax(340px, 1.35fr) minmax(240px, 1fr);
@@ -96,7 +105,10 @@ canvas {
   box-sizing: border-box;
   border: 1px solid #25415f;
   border-radius: 8px;
-  background: rgba(8, 18, 30, 0.94);
+  background: linear-gradient(180deg, rgba(10, 23, 38, 0.98), rgba(6, 15, 26, 0.96));
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   padding: 14px;
 }
 
@@ -164,20 +176,35 @@ canvas {
   min-width: 0;
 }
 
-.builder-block {
+.builder-block,
+.builder-section {
   border-top: 1px solid #203954;
   margin-top: 12px;
   padding-top: 12px;
 }
 
-.builder-block h3 {
+.builder-block h3,
+.builder-section h3 {
   font-size: 15px;
-  margin-bottom: 8px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.section-heading span {
+  color: #8fa8c4;
+  font-size: 11px;
+  text-align: right;
 }
 
 .ship-preview {
   display: grid;
-  grid-template-columns: minmax(190px, 0.95fr) minmax(170px, 1fr);
+  grid-template-columns: 1fr;
   gap: 12px;
   align-items: stretch;
   border: 1px solid #203954;
@@ -190,7 +217,7 @@ canvas {
 .ship-preview-art {
   display: grid;
   place-items: center;
-  min-height: 170px;
+  min-height: 154px;
 }
 
 .ship-preview-svg {
@@ -202,7 +229,7 @@ canvas {
 
 .ship-preview-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
 }
@@ -231,7 +258,7 @@ canvas {
 
 .attribute-row {
   display: grid;
-  grid-template-columns: 1fr 34px 34px 34px;
+  grid-template-columns: 1fr 34px minmax(78px, auto) 34px;
   gap: 8px;
   margin-bottom: 7px;
 }
@@ -246,10 +273,58 @@ canvas {
   text-align: center;
 }
 
+.attribute-row strong small {
+  color: #9fb6d0;
+  font-size: 10px;
+  font-weight: 500;
+}
+
 .visual-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.silhouette-controls {
+  margin-top: 10px;
+}
+
+.builder-section .field-label {
+  margin-bottom: 0;
+}
+
+.hull-option-grid,
+.loadout-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.hull-option-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hull-option-grid button {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 52px;
+  text-align: left;
+}
+
+.hull-option-grid button strong {
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.hull-option-grid button small {
+  color: #9fb6d0;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.loadout-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .stats-line {
@@ -265,7 +340,7 @@ canvas {
   background: #091724;
   font-size: 13px;
   line-height: 1.35;
-  margin: -2px 0 12px;
+  margin: 8px 0 0;
   padding: 8px;
 }
 
@@ -304,12 +379,26 @@ canvas {
     grid-template-columns: 1fr;
   }
 
+  .loadout-grid {
+    grid-template-columns: 1fr;
+  }
+
   .ship-preview {
     grid-template-columns: 1fr;
+  }
+
+  .ship-preview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .garage-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .hull-option-grid {
+    grid-template-columns: 1fr;
   }
 }

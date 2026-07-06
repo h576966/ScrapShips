@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { HULL_GRID_SIZE } from "../src/game/data/balance";
+import { getHullPreset } from "../src/game/data/hullPresets";
 import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { HullShape, ShipBuild } from "../src/game/model";
-import { calculateShipStats } from "../src/game/services/ShipStatsCalculator";
+import {
+  calculateShipStats,
+  getEffectiveShipAttributes
+} from "../src/game/services/ShipStatsCalculator";
 
 describe("ShipStatsCalculator", () => {
   it("returns higher mass for more hull pixels", () => {
@@ -25,6 +30,31 @@ describe("ShipStatsCalculator", () => {
     expect(stats).not.toHaveProperty("projectileDamage");
     expect(stats).not.toHaveProperty("projectileSpeed");
     expect(stats).not.toHaveProperty("fireCooldownMs");
+  });
+
+  it("applies hull modifiers to effective attributes without mutating base values", () => {
+    const ship = makePresetShip("needle");
+    const effective = getEffectiveShipAttributes(ship);
+
+    expect(effective.speed).toBe(6);
+    expect(effective.hull).toBe(4);
+    expect(ship.attributes.speed).toBe(5);
+    expect(ship.attributes.hull).toBe(5);
+  });
+
+  it("calculates stats from effective hull-modified attributes", () => {
+    const needle = makePresetShip("needle");
+    const sameHullWithoutSpeedModifier = {
+      ...needle,
+      visual: {
+        ...needle.visual,
+        hullPreset: "scrapper" as const
+      }
+    };
+
+    expect(calculateShipStats(needle).maxSpeed).toBeGreaterThan(
+      calculateShipStats(sameHullWithoutSpeedModifier).maxSpeed
+    );
   });
 });
 
@@ -52,10 +82,21 @@ function makeShip(pixelCount: number): ShipBuild {
 
 function makeHull(pixelCount: number): HullShape {
   return {
-    gridSize: 16,
+    gridSize: HULL_GRID_SIZE,
     pixels: Array.from({ length: pixelCount }, (_, index) => ({
-      x: index % 16,
-      y: Math.floor(index / 16)
+      x: index % HULL_GRID_SIZE,
+      y: Math.floor(index / HULL_GRID_SIZE)
     }))
+  };
+}
+
+function makePresetShip(hullPreset: ShipBuild["visual"]["hullPreset"]): ShipBuild {
+  return {
+    ...makeShip(24),
+    hullShape: getHullPreset(hullPreset),
+    visual: {
+      ...DEFAULT_SHIP_VISUAL,
+      hullPreset
+    }
   };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_PLAYER_BINDINGS,
+  SYSTEM_BINDINGS,
   bindingLayoutLabels,
   bindingLabels,
   matchesAnyBinding
@@ -85,6 +86,13 @@ describe("input bindings", () => {
     ).toBe(true);
     expect(
       matchesAnyBinding(keyEvent("Quote", "'"), DEFAULT_PLAYER_BINDINGS.p2.rotateRight)
+    ).toBe(true);
+  });
+
+  it("keeps H reserved for the hitbox debug overlay", () => {
+    expect(bindingLabels(SYSTEM_BINDINGS.toggleHitboxDebug)).toBe("H");
+    expect(
+      matchesAnyBinding(keyEvent("KeyH", "h"), SYSTEM_BINDINGS.toggleHitboxDebug)
     ).toBe(true);
   });
 });

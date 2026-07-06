@@ -99,7 +99,7 @@ Rules:
 - A ship has a name, colors, hull shape, attributes, and optional gadget.
 - Attribute total must not exceed 30.
 - Attribute max should be 10.
-- Hull shape should support a 16x16 grid and a list of hull pixels.
+- Hull shape should support a 17x17 grid and a list of hull pixels.
 
 Implement validation functions for these rules.
 

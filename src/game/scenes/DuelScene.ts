@@ -53,8 +53,10 @@ export class DuelScene extends Phaser.Scene {
   private ships!: ShipMap;
   private messageText!: Phaser.GameObjects.Text;
   private debugText!: Phaser.GameObjects.Text;
+  private hitboxDebugGraphics?: Phaser.GameObjects.Graphics;
   private duelData: DuelSceneData = {};
   private roundOver = false;
+  private hitboxDebugVisible = false;
   private lastShipCollisionAt = 0;
   private previousGadgetPressed: Record<PlayerId, boolean> = { p1: false, p2: false };
 
@@ -63,6 +65,9 @@ export class DuelScene extends Phaser.Scene {
       this.resetRound();
     } else if (matchesAnyBinding(event, SYSTEM_BINDINGS.returnToGarage)) {
       this.scene.start("GarageScene");
+    } else if (matchesAnyBinding(event, SYSTEM_BINDINGS.toggleHitboxDebug)) {
+      this.hitboxDebugVisible = !this.hitboxDebugVisible;
+      this.updateHitboxDebug();
     }
   };
 
@@ -116,6 +121,10 @@ export class DuelScene extends Phaser.Scene {
     this.arena.reset();
 
     this.createHud();
+    if (import.meta.env.DEV) {
+      this.hitboxDebugGraphics = this.add.graphics();
+      this.hitboxDebugGraphics.setDepth(39);
+    }
     this.installDebugHooks();
     this.input.keyboard?.on("keydown", this.onSystemKeyDown);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.shutdown());
@@ -154,6 +163,7 @@ export class DuelScene extends Phaser.Scene {
     }
 
     this.updateDebugText();
+    this.updateHitboxDebug();
     this.checkWinState();
   }
 
@@ -185,7 +195,7 @@ export class DuelScene extends Phaser.Scene {
     const p2 = DEFAULT_PLAYER_BINDINGS.p2;
     const controls =
       `P1 ${bindingLabels(p1.rotateLeft)}/${bindingLabels(p1.thrust)}/${bindingLabels(p1.rotateRight)} move, ${bindingLabels(p1.fire)} fire, ${bindingLabels(p1.brake)} brake, ${bindingLabels(p1.turbo)} turbo\n` +
-      `P2 ${bindingLabels(p2.rotateLeft)}/${bindingLabels(p2.thrust)}/${bindingLabels(p2.rotateRight)} move, ${bindingLabels(p2.fire)} fire, ${bindingLabels(p2.brake)} brake, ${bindingLabels(p2.turbo)} turbo | R restart | G garage`;
+      `P2 ${bindingLabels(p2.rotateLeft)}/${bindingLabels(p2.thrust)}/${bindingLabels(p2.rotateRight)} move, ${bindingLabels(p2.fire)} fire, ${bindingLabels(p2.brake)} brake, ${bindingLabels(p2.turbo)} turbo | R restart | G garage | H hitboxes`;
 
     this.createFixedText(18, 16, controls, {
       fontFamily: "monospace",
@@ -280,6 +290,38 @@ export class DuelScene extends Phaser.Scene {
     );
   }
 
+  private updateHitboxDebug(): void {
+    const graphics = this.hitboxDebugGraphics;
+    if (!graphics) {
+      return;
+    }
+
+    graphics.clear();
+    if (!this.hitboxDebugVisible) {
+      return;
+    }
+
+    for (const playerId of PLAYER_IDS) {
+      const ship = this.ships[playerId];
+      const hitbox = ship.getHitboxDebugSnapshot();
+      const color = playerId === "p1" ? 0x76c8ff : 0xff7d7d;
+
+      graphics.lineStyle(2, color, 0.9);
+      graphics.strokeRect(
+        hitbox.bodyX,
+        hitbox.bodyY,
+        hitbox.bodyWidth,
+        hitbox.bodyHeight
+      );
+      graphics.lineStyle(2, 0xfff1a8, 0.7);
+      graphics.strokeCircle(hitbox.centerX, hitbox.centerY, hitbox.hitRadius);
+      graphics.fillStyle(0xffffff, 0.9);
+      graphics.fillCircle(hitbox.centerX, hitbox.centerY, 3);
+      graphics.fillStyle(0xfff1a8, 0.9);
+      graphics.fillCircle(hitbox.muzzleX, hitbox.muzzleY, 4);
+    }
+  }
+
   private createFixedText(
     screenX: number,
     screenY: number,
@@ -317,6 +359,7 @@ export class DuelScene extends Phaser.Scene {
     this.combat.destroy();
     this.arena.destroy();
     this.background.destroy();
+    this.hitboxDebugGraphics?.destroy();
     if (import.meta.env.DEV) {
       delete window.__scrapshipsDuelDebug;
     }
@@ -356,6 +399,10 @@ export class DuelScene extends Phaser.Scene {
       setShipGadget: (playerId, gadget) => {
         this.combat.setShipGadget(playerId, gadget);
       },
+      setHitboxDebugVisible: (visible) => {
+        this.hitboxDebugVisible = visible;
+        this.updateHitboxDebug();
+      },
       placeMine: (playerId) => this.combat.placeMineForPlayer(playerId, this.time.now),
       damageShip: (playerId, amount) => {
         this.ships[playerId].takeDamage(amount, this.time.now);
@@ -385,6 +432,7 @@ export class DuelScene extends Phaser.Scene {
       weapon: ship.build.primaryWeapon,
       x: ship.shape.x,
       y: ship.shape.y,
+      hitbox: ship.getHitboxDebugSnapshot(),
       velocityX: ship.body.velocity.x,
       velocityY: ship.body.velocity.y,
       ...ship.getEffectSnapshot(this.time.now)

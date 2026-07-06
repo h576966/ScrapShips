@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  findHullPresetId,
+  getHullPreset
+} from "../src/game/data/hullPresets";
 import { DEFAULT_SHIP_VISUAL } from "../src/game/data/shipVisualOptions";
 import type { PlayerProfile } from "../src/game/model";
 import { loadProfiles, saveProfiles } from "../src/game/services/SaveService";
@@ -56,6 +60,37 @@ describe("SaveService", () => {
     const loaded = loadProfiles(storage);
 
     expect(loaded?.[0].ships[0].visual).toEqual(DEFAULT_SHIP_VISUAL);
+  });
+
+  it("migrates old 16x16 hull saves to the selected 17x17 preset", () => {
+    const storage = makeStorage();
+    const profile = makeProfile("profile-1");
+    const legacyProfile = {
+      ...profile,
+      ships: profile.ships.map((ship) => ({
+        ...ship,
+        hullShape: {
+          gridSize: 16,
+          pixels: [
+            { x: 7, y: 7 },
+            { x: 8, y: 7 },
+            { x: 7, y: 8 },
+            { x: 8, y: 8 }
+          ]
+        },
+        visual: {
+          ...ship.visual,
+          hullPreset: "raider"
+        }
+      }))
+    };
+    storage.setItem("scrapships.profiles.v1", JSON.stringify([legacyProfile]));
+
+    const loaded = loadProfiles(storage);
+
+    expect(loaded?.[0].ships[0].hullShape.gridSize).toBe(17);
+    const loadedHull = loaded?.[0].ships[0].hullShape ?? getHullPreset("scrapper");
+    expect(findHullPresetId(loadedHull)).toBe("raider");
   });
 
   it("migrates old mine gadgets to proximity mines", () => {
@@ -147,15 +182,7 @@ function makeProfile(id: string): PlayerProfile {
           primary: "#ffffff",
           secondary: "#88ccff"
         },
-        hullShape: {
-          gridSize: 16,
-          pixels: [
-            { x: 7, y: 7 },
-            { x: 8, y: 7 },
-            { x: 7, y: 8 },
-            { x: 8, y: 8 }
-          ]
-        },
+        hullShape: getHullPreset("scrapper"),
         attributes: {
           speed: 5,
           turning: 5,

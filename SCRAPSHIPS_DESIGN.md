@@ -56,6 +56,8 @@ The current playable prototype includes:
 - Ship create, duplicate, rename, delete except last ship, and max 5 ships per profile.
 - Builder controls for colors, attributes, hull preset, primary weapon, gadget, and generated visual details.
 - Duel arena with a larger generated field, asteroids, pickups, HP/shield bars, hit feedback, and restart/garage shortcuts.
+- Shared cell-based ship visual specs used by both Garage preview and Duel rendering.
+- Dev hitbox overlay for ship physics body, center, muzzle point, and weapon hit radius.
 - Primary weapons configured in `src/game/data/weapons.ts`:
   - Laser: short-range continuous beam.
   - Bolt Cannon: medium-range repeated projectile.
@@ -119,7 +121,7 @@ export type ShipAttributes = {
 };
 
 export type HullShape = {
-  gridSize: 16;
+  gridSize: 17;
   pixels: Array<{ x: number; y: number }>;
 };
 
@@ -171,10 +173,22 @@ Mass should not be directly assigned by the player. It should be derived from th
 Early version:
 
 - Hull shape is drawn or selected.
+- Hull presets use a 17x17 pixel grid with center column `x=8` for true centered weapons.
 - More hull pixels = larger hitbox and more mass.
 - More mass gives some survivability but reduces agility.
-- Shape affects hitbox.
+- Shape affects hitbox and applies a small +1/-1 attribute trade-off.
 - Shape does not need advanced per-pixel damage in early versions.
+
+Current hull preset modifiers:
+
+| Preset | Modifier |
+|---|---|
+| Scrapper | +1 weapon, -1 turbo |
+| Needle | +1 speed, -1 hull |
+| Bulwark | +1 hull, -1 turning |
+| Raider | +1 turbo, -1 shield |
+
+Base attributes are still saved and budgeted separately. Derived stats and combat use effective attributes from base values plus hull modifiers.
 
 Suggested derived values:
 
@@ -336,7 +350,7 @@ Keep visuals simple:
 
 The first version can use simple generated rectangles/polygons before real art.
 
-Current ship visuals are generated polygons. Hull presets affect hull pixels/mass and silhouette. Nose, wing, engine, and accent color options are cosmetic for now and should remain lightweight unless there is a clear gameplay reason to make them mechanical.
+Current ship visuals are generated from a shared pixel-cell visual spec used by both the Garage preview and Duel ships. Hull presets affect hull pixels, mass, hit radius, silhouette, and small attribute modifiers. Nose, wing, engine, and accent color options are integrated as grid-aligned visual cells and are cosmetic for now unless there is a clear gameplay reason to make them mechanical. Asteroids use generated irregular polygons with outline, shadow, highlights, surface pits, and slow rotation.
 
 ## Recommended repo structure
 

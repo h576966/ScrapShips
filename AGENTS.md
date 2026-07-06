@@ -115,7 +115,7 @@ Initial attributes:
 Total attribute budget: 30 points.
 Suggested max per attribute: 10.
 
-Hull preset should affect mass and hitbox. Nose, wing, engine, and accent options are cosmetic for now.
+Hull presets use a 17x17 grid with center column `x=8`, and should affect mass, hitbox, silhouette, and small +1/-1 attribute trade-offs. Nose, wing, engine, and accent options are cosmetic for now.
 
 Primary weapon behavior is config-driven in `src/game/data/weapons.ts`; do not duplicate projectile damage, speed, or cooldown fields in derived ship stats.
 

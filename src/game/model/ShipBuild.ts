@@ -13,7 +13,7 @@ export type HullPixel = {
 };
 
 export type HullShape = {
-  gridSize: 16;
+  gridSize: 17;
   pixels: HullPixel[];
 };
 

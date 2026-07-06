@@ -172,14 +172,14 @@ export class DuelCombatSystem {
       x: muzzle.x,
       y: muzzle.y,
       angle: ship.getFacingAngle(),
-      damage: scaleWeaponDamage(weapon, ship.build.attributes.weapon),
+      damage: scaleWeaponDamage(weapon, ship.effectiveAttributes.weapon),
       weapon,
       createdAt: time,
       corrosive: ship.hasCorrosiveAmmo(time)
     });
 
     this.projectiles.push(projectile);
-    ship.markFired(time, scaleWeaponCooldown(weapon, ship.build.attributes.weapon));
+    ship.markFired(time, scaleWeaponCooldown(weapon, ship.effectiveAttributes.weapon));
   }
 
   private placeMine(ship: DuelShipEntity, time: number): boolean {
@@ -240,7 +240,7 @@ export class DuelCombatSystem {
         targetRadius: target.getHitRadius()
       })
     ) {
-      target.takeDamage(getLaserDamage(weapon, ship.build.attributes.weapon, delta), time);
+      target.takeDamage(getLaserDamage(weapon, ship.effectiveAttributes.weapon, delta), time);
       if (time >= this.laserImpactReadyAt[ship.playerId]) {
         this.effects.createImpact(target.shape.x, target.shape.y, weapon.color);
         this.laserImpactReadyAt[ship.playerId] = time + 90;
@@ -375,7 +375,7 @@ export class DuelCombatSystem {
     time: number,
     delta: number
   ): void {
-    const damage = getLaserDamage(weapon, ship.build.attributes.weapon, delta);
+    const damage = getLaserDamage(weapon, ship.effectiveAttributes.weapon, delta);
     for (const asteroid of this.arena.getAsteroids()) {
       if (
         laserIntersectsCircle({
