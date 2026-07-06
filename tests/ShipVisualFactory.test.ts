@@ -10,6 +10,7 @@ import {
   renderShipPreviewSvg,
   resolveHullPixels
 } from "../src/game/rendering/ShipVisualFactory";
+import { createShipTextureKey } from "../src/game/rendering/ShipTextureFactory";
 
 describe("ShipVisualFactory", () => {
   it("resolves hull pixels from existing hull data without sharing references", () => {
@@ -61,6 +62,26 @@ describe("ShipVisualFactory", () => {
     expect(svg).toContain("<svg");
     expect(svg).toContain(ship.colors.primary);
     expect(svg).toContain(ship.colors.secondary);
+    expect(JSON.stringify(ship)).toBe(before);
+  });
+
+  it("creates stable ship texture keys from visual identity", () => {
+    const ship = makeShip();
+    const before = JSON.stringify(ship);
+    const sameKey = createShipTextureKey(makeShip());
+    const colorKey = createShipTextureKey(
+      makeShip({ colors: { primary: "#ff6666", secondary: "#c9e8ff" } })
+    );
+    const hullKey = createShipTextureKey(
+      makeShip({
+        hullShape: getHullPreset("needle"),
+        visual: { ...DEFAULT_SHIP_VISUAL, hullPreset: "needle" }
+      })
+    );
+
+    expect(createShipTextureKey(ship)).toBe(sameKey);
+    expect(colorKey).not.toBe(sameKey);
+    expect(hullKey).not.toBe(sameKey);
     expect(JSON.stringify(ship)).toBe(before);
   });
 

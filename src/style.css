@@ -17,6 +17,8 @@ body {
 
 canvas {
   display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .garage-ui {
@@ -104,7 +106,7 @@ canvas {
 .garage-panel {
   box-sizing: border-box;
   border: 1px solid #25415f;
-  border-radius: 8px;
+  border-radius: 6px;
   background: linear-gradient(180deg, rgba(10, 23, 38, 0.98), rgba(6, 15, 26, 0.96));
   box-shadow:
     0 12px 30px rgba(0, 0, 0, 0.22),
@@ -208,8 +210,12 @@ canvas {
   gap: 12px;
   align-items: stretch;
   border: 1px solid #203954;
-  border-radius: 6px;
-  background: #07111c;
+  border-radius: 4px;
+  background:
+    linear-gradient(rgba(95, 136, 170, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(95, 136, 170, 0.045) 1px, transparent 1px),
+    #07111c;
+  background-size: 12px 12px;
   margin: 2px 0 12px;
   padding: 10px;
 }
@@ -225,6 +231,7 @@ canvas {
   width: 100%;
   max-width: 248px;
   height: 170px;
+  image-rendering: pixelated;
 }
 
 .ship-preview-stats {
@@ -346,7 +353,7 @@ canvas {
 
 .garage-ui button {
   border: 1px solid #3a5c80;
-  border-radius: 6px;
+  border-radius: 4px;
   background: #102234;
   color: #e8f4ff;
   min-height: 34px;
@@ -357,7 +364,9 @@ canvas {
 .garage-ui button:hover:not(:disabled),
 .garage-ui button.active {
   border-color: #62b3ff;
-  background: #173857;
+  background:
+    linear-gradient(180deg, rgba(98, 179, 255, 0.16), rgba(23, 56, 87, 0.92)),
+    #173857;
 }
 
 .garage-ui button.primary {

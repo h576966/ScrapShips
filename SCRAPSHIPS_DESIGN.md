@@ -57,6 +57,9 @@ The current playable prototype includes:
 - Builder controls for colors, attributes, hull preset, primary weapon, gadget, and generated visual details.
 - Duel arena with a larger generated field, asteroids, pickups, HP/shield bars, hit feedback, and restart/garage shortcuts.
 - Shared cell-based ship visual specs used by both Garage preview and Duel rendering.
+- Boot preload of a small curated CC0 Kenney asset subset under `public/assets/scrapships`.
+- In-game ship textures baked from the existing `ShipVisualSpec`, with Garage SVG previews using the same spec.
+- Pixel-art effects for muzzle flashes, projectile trails, laser impacts, shield shimmer, hull sparks, pickup bursts, mines, and ship destruction.
 - Dev hitbox overlay for ship physics body, center, muzzle point, and weapon hit radius.
 - Primary weapons configured in `src/game/data/weapons.ts`:
   - Laser: short-range continuous beam.
@@ -292,6 +295,7 @@ Rules:
 - Projectile weapons spawn from the ship nose/centerline.
 - Laser starts from the ship nose/centerline.
 - Asteroids spawn across the arena and avoid starting too close to ships.
+- Infrequent fast asteroids can pass across the field as hazards and cause stronger impact damage.
 - Winner is the last ship alive.
 - Round reset after win.
 
@@ -348,9 +352,9 @@ Keep visuals simple:
 - visible base repair radius
 - simple explosion/hit effects
 
-The first version can use simple generated rectangles/polygons before real art.
+The first version uses a mix of generated pixel textures and a small curated CC0 Kenney asset subset.
 
-Current ship visuals are generated from a shared pixel-cell visual spec used by both the Garage preview and Duel ships. Hull presets affect hull pixels, mass, hit radius, silhouette, and small attribute modifiers. Nose, wing, engine, and accent color options are integrated as grid-aligned visual cells and are cosmetic for now unless there is a clear gameplay reason to make them mechanical. Asteroids use generated irregular polygons with outline, shadow, highlights, surface pits, and slow rotation.
+Current ship visuals are generated from a shared pixel-cell visual spec used by both the Garage preview and Duel ships. Duel ships bake that spec into runtime textures so custom silhouettes remain readable without hundreds of live cell objects. Hull presets affect hull pixels, mass, hit radius, silhouette, and small attribute modifiers. Nose, wing, engine, and accent color options are integrated as grid-aligned visual cells and are cosmetic for now unless there is a clear gameplay reason to make them mechanical. Asteroids use generated irregular polygons with outline, shadow, highlights, surface pits, slow rotation, and configured passing-asteroid trail/warning visuals.
 
 ## Recommended repo structure
 
@@ -359,6 +363,7 @@ src/
   main.ts
   game/
     scenes/
+      BootScene.ts
       MainMenuScene.ts
       GarageScene.ts
       DuelScene.ts
@@ -372,7 +377,7 @@ src/
       InputSystem.ts
       DuelCombatSystem.ts
       ArenaObjectSystem.ts
-      DuelEffects.ts
+      VisualEffectsSystem.ts
       WeaponSystem.ts
       MineSystem.ts
       PickupSystem.ts
@@ -390,6 +395,7 @@ src/
       gadgets.ts
       hullPresets.ts
       shipVisualOptions.ts
+      assets.ts
       arenaObjects.ts
       defaultProfiles.ts
       defaultShips.ts

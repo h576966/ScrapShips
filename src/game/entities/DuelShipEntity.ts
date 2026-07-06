@@ -1,13 +1,11 @@
 import Phaser from "phaser";
-import { HULL_CENTER_INDEX } from "../data/balance";
 import type { PlayerId } from "../input/bindings";
 import type { ShipAttributes, ShipBuild } from "../model";
 import {
   calculateShipHitRadius,
-  createShipVisualSpec,
-  type ShipVisualCell,
   type ShipVisualSpec
 } from "../rendering/ShipVisualFactory";
+import { createOrUpdateShipTexture } from "../rendering/ShipTextureFactory";
 import {
   getEffectiveShipAttributes,
   type ShipStats
@@ -45,21 +43,21 @@ export class DuelShipEntity {
   readonly effectiveAttributes: ShipAttributes;
   readonly shape: Phaser.GameObjects.Rectangle;
 
+  private readonly shipSprite: Phaser.GameObjects.Image;
   private readonly boostFlame: Phaser.GameObjects.Triangle;
   private readonly visualSpec: ShipVisualSpec;
-  private readonly visualCellShapes: Phaser.GameObjects.Rectangle[] = [];
   private readonly nameLabel: Phaser.GameObjects.Text;
   private readonly hpBarBack: Phaser.GameObjects.Rectangle;
   private readonly hpBar: Phaser.GameObjects.Rectangle;
   private readonly shieldBar: Phaser.GameObjects.Rectangle;
   private readonly primaryColor: number;
-  private readonly secondaryColor: number;
   private readonly accentColor: number;
   private readonly muzzleDistance: number;
   private readonly flameDistance: number;
   private readonly hudOffset: number;
   private readonly hitRadius: number;
   private hitFlashUntil = 0;
+  private lastExhaustAt = 0;
   private effects: ShipEffectState = createEmptyShipEffects();
 
   hp: number;
@@ -76,8 +74,10 @@ export class DuelShipEntity {
     this.stats = options.stats;
     this.effectiveAttributes = getEffectiveShipAttributes(options.build);
     this.primaryColor = colorToNumber(options.build.colors.primary);
-    this.secondaryColor = colorToNumber(options.build.colors.secondary);
-    this.visualSpec = createShipVisualSpec(options.build, { stats: options.stats });
+    const texture = createOrUpdateShipTexture(scene, options.build, {
+      stats: options.stats
+    });
+    this.visualSpec = texture.spec;
     this.accentColor = colorToNumber(this.visualSpec.visualStyle.accentColor);
     this.hp = options.stats.maxHp;
     this.shield = options.stats.maxShield;
@@ -95,6 +95,11 @@ export class DuelShipEntity {
     this.boostFlame.setBlendMode(Phaser.BlendModes.ADD);
     this.boostFlame.setDepth(5);
 
+    this.shipSprite = scene.add.image(options.spawn.x, options.spawn.y, texture.key);
+    this.shipSprite.setDepth(11);
+    this.shipSprite.setOrigin(0.5);
+    tryAddGlow(this.shipSprite, this.accentColor, scene);
+
     this.shape = scene.add.rectangle(
       options.spawn.x,
       options.spawn.y,
@@ -105,20 +110,6 @@ export class DuelShipEntity {
     );
     this.shape.setDepth(10);
     scene.physics.add.existing(this.shape);
-
-    for (const cell of this.visualSpec.visualCells) {
-      const cellShape = scene.add.rectangle(
-        options.spawn.x,
-        options.spawn.y,
-        this.visualSpec.cellSize + 0.25,
-        this.visualSpec.cellSize + 0.25,
-        this.getCellColor(cell),
-        cell.alpha
-      );
-      cellShape.setStrokeStyle(0.7, 0x050910, 0.62);
-      cellShape.setDepth(cell.role === "primary" ? 10 : 11);
-      this.visualCellShapes.push(cellShape);
-    }
 
     const body = this.body;
     body.setAllowGravity(false);
@@ -167,15 +158,12 @@ export class DuelShipEntity {
     this.hitFlashUntil = 0;
     this.effects = createEmptyShipEffects();
     this.shape.setActive(true).setVisible(true);
-    for (const cell of this.visualCellShapes) {
-      cell.setVisible(true);
-    }
+    this.shipSprite.setActive(true).setVisible(true).clearTint().setAlpha(1);
     this.boostFlame.setVisible(false);
     this.body.enable = true;
     this.body.reset(x, y);
     this.body.setVelocity(0, 0);
     this.shape.setRotation(rotation);
-    this.updateCellStyles(false, false);
     this.updateHullDetails();
     this.updateHud();
   }
@@ -196,9 +184,9 @@ export class DuelShipEntity {
     }
 
     const flash = time < this.hitFlashUntil;
-    this.updateCellStyles(flash, getSpeedMultiplier(this.effects, time) > 1);
+    this.updateShipVisualStyle(flash, getSpeedMultiplier(this.effects, time) > 1);
     this.updateHullDetails();
-    this.updateBoostFlame(input.thrust || input.turbo);
+    this.updateBoostFlame(input.thrust || input.turbo, time);
     this.updateHud();
   }
 
@@ -319,10 +307,8 @@ export class DuelShipEntity {
 
   destroy(): void {
     this.shape.destroy();
+    this.shipSprite.destroy();
     this.boostFlame.destroy();
-    for (const cell of this.visualCellShapes) {
-      cell.destroy();
-    }
     this.nameLabel.destroy();
     this.hpBarBack.destroy();
     this.hpBar.destroy();
@@ -378,13 +364,11 @@ export class DuelShipEntity {
 
     this.body.enable = false;
     this.shape.setVisible(false);
-    for (const cell of this.visualCellShapes) {
-      cell.setVisible(false);
-    }
+    this.shipSprite.setVisible(false);
     this.boostFlame.setVisible(false);
   }
 
-  private updateBoostFlame(active: boolean): void {
+  private updateBoostFlame(active: boolean, time: number): void {
     if (!this.alive || !active) {
       this.boostFlame.setVisible(false);
       return;
@@ -398,44 +382,59 @@ export class DuelShipEntity {
       this.shape.y - Math.sin(angle) * this.flameDistance
     );
     this.boostFlame.setRotation(this.shape.rotation);
+    this.emitEngineExhaust(angle, time);
   }
 
   private updateHullDetails(): void {
-    const visible = this.alive;
-    this.visualSpec.visualCells.forEach((cell, index) => {
-      const cellShape = this.visualCellShapes[index];
-      const local = this.getCellLocalOffset(cell);
-      const rotated = rotatePoint(local.x, local.y, this.shape.rotation);
-      cellShape.setPosition(this.shape.x + rotated.x, this.shape.y + rotated.y);
-      cellShape.setRotation(this.shape.rotation);
-      cellShape.setVisible(visible);
-    });
+    this.shipSprite.setPosition(this.shape.x, this.shape.y);
+    this.shipSprite.setRotation(this.shape.rotation);
+    this.shipSprite.setVisible(this.alive);
   }
 
-  private updateCellStyles(flash: boolean, boosted: boolean): void {
-    const strokeColor = boosted ? 0x7dd3ff : 0x050910;
-    this.visualSpec.visualCells.forEach((cell, index) => {
-      const shape = this.visualCellShapes[index];
-      shape.setFillStyle(flash ? 0xffffff : this.getCellColor(cell), cell.alpha);
-      shape.setStrokeStyle(0.7, strokeColor, boosted ? 0.85 : 0.62);
-    });
-  }
-
-  private getCellLocalOffset(cell: ShipVisualCell): { x: number; y: number } {
-    return {
-      x: (cell.x - HULL_CENTER_INDEX) * this.visualSpec.cellSize,
-      y: (cell.y - HULL_CENTER_INDEX) * this.visualSpec.cellSize
-    };
-  }
-
-  private getCellColor(cell: ShipVisualCell): number {
-    if (cell.role === "accent") {
-      return this.accentColor;
+  private updateShipVisualStyle(flash: boolean, boosted: boolean): void {
+    if (flash) {
+      this.shipSprite.setTint(0xffffff);
+      this.shipSprite.setAlpha(1);
+      return;
     }
-    if (cell.role === "secondary") {
-      return this.secondaryColor;
+
+    if (boosted) {
+      this.shipSprite.setTint(0xbfeeff);
+      this.shipSprite.setAlpha(1);
+      return;
     }
-    return this.primaryColor;
+
+    this.shipSprite.clearTint();
+    this.shipSprite.setAlpha(1);
+  }
+
+  private emitEngineExhaust(angle: number, time: number): void {
+    if (time < this.lastExhaustAt) {
+      return;
+    }
+
+    this.lastExhaustAt = time + 42;
+    const rear = this.getRearPosition(this.flameDistance + 2);
+    const spread = Phaser.Math.FloatBetween(-0.22, 0.22);
+    const travelAngle = angle + Math.PI + spread;
+    const ember = this.scene.add.circle(
+      rear.x,
+      rear.y,
+      Phaser.Math.FloatBetween(1.5, 3.2),
+      Math.random() > 0.45 ? this.accentColor : this.primaryColor,
+      0.65
+    );
+    ember.setDepth(6);
+    ember.setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: ember,
+      x: rear.x + Math.cos(travelAngle) * Phaser.Math.Between(14, 30),
+      y: rear.y + Math.sin(travelAngle) * Phaser.Math.Between(14, 30),
+      alpha: 0,
+      scale: 0.25,
+      duration: 260,
+      onComplete: () => ember.destroy()
+    });
   }
 
   private updateHud(): void {
@@ -466,15 +465,19 @@ function colorToNumber(color: string): number {
   return Number.parseInt(color.replace("#", ""), 16);
 }
 
-function rotatePoint(
-  x: number,
-  y: number,
-  rotation: number
-): { x: number; y: number } {
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
-  return {
-    x: x * cos - y * sin,
-    y: x * sin + y * cos
-  };
+function tryAddGlow(
+  sprite: Phaser.GameObjects.Image,
+  color: number,
+  scene: Phaser.Scene
+): void {
+  if (scene.game.renderer.type !== Phaser.WEBGL) {
+    return;
+  }
+
+  const postFx = (sprite as Phaser.GameObjects.Image & {
+    postFX?: { addGlow?: (...args: unknown[]) => void };
+  }).postFX;
+  if (postFx && "addGlow" in postFx) {
+    postFx.addGlow?.(color, 0.6, 0, false, 0.08, 8);
+  }
 }

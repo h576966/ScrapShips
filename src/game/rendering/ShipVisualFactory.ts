@@ -170,7 +170,7 @@ export function renderShipPreviewSvg(
     .join("");
 
   return `
-    <svg class="ship-preview-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Ship preview">
+    <svg class="ship-preview-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Ship preview" shape-rendering="crispEdges">
       <rect x="0" y="0" width="${width}" height="${height}" rx="8" fill="#081421" />
       <g opacity="0.16">
         <line x1="${offsetX}" y1="${offsetY}" x2="${offsetX + gridWidth}" y2="${offsetY}" stroke="#7890aa" />
@@ -389,7 +389,7 @@ function renderSvgCell(
         : options.primary;
   return `<rect x="${options.offsetX + cell.x * options.cellSize}" y="${
     options.offsetY + cell.y * options.cellSize
-  }" width="${options.cellSize}" height="${options.cellSize}" rx="1" fill="${color}" fill-opacity="${
+  }" width="${options.cellSize}" height="${options.cellSize}" fill="${color}" fill-opacity="${
     cell.alpha
   }" stroke="#050910" stroke-opacity="0.52" stroke-width="1" />`;
 }

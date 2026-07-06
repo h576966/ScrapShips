@@ -21,8 +21,8 @@ import { loadProfiles, saveProfiles } from "../services/SaveService";
 import { calculateShipStats } from "../services/ShipStatsCalculator";
 import { ArenaObjectSystem } from "../systems/ArenaObjectSystem";
 import { DuelCombatSystem } from "../systems/DuelCombatSystem";
-import { DuelEffects } from "../systems/DuelEffects";
 import { SpaceBackground } from "../systems/SpaceBackground";
+import { VisualEffectsSystem } from "../systems/VisualEffectsSystem";
 import {
   PLAYER_IDS,
   type DuelDebugApi,
@@ -46,7 +46,7 @@ declare global {
 
 export class DuelScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
-  private effects!: DuelEffects;
+  private effects!: VisualEffectsSystem;
   private background!: SpaceBackground;
   private arena!: ArenaObjectSystem;
   private combat!: DuelCombatSystem;
@@ -94,7 +94,7 @@ export class DuelScene extends Phaser.Scene {
     const playerTwo = this.resolveDuelSlot("p2", profiles);
 
     this.inputSystem = new InputSystem(this);
-    this.effects = new DuelEffects(this);
+    this.effects = new VisualEffectsSystem(this);
     this.ships = {
       p1: this.createShipEntity("p1", playerOne, {
         x: 320,
@@ -132,7 +132,7 @@ export class DuelScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     this.background.update(delta);
-    this.arena.update(time);
+    this.arena.update(time, delta);
     this.combat.update(time, delta);
 
     for (const playerId of PLAYER_IDS) {
@@ -194,8 +194,9 @@ export class DuelScene extends Phaser.Scene {
     const p1 = DEFAULT_PLAYER_BINDINGS.p1;
     const p2 = DEFAULT_PLAYER_BINDINGS.p2;
     const controls =
-      `P1 ${bindingLabels(p1.rotateLeft)}/${bindingLabels(p1.thrust)}/${bindingLabels(p1.rotateRight)} move, ${bindingLabels(p1.fire)} fire, ${bindingLabels(p1.brake)} brake, ${bindingLabels(p1.turbo)} turbo\n` +
-      `P2 ${bindingLabels(p2.rotateLeft)}/${bindingLabels(p2.thrust)}/${bindingLabels(p2.rotateRight)} move, ${bindingLabels(p2.fire)} fire, ${bindingLabels(p2.brake)} brake, ${bindingLabels(p2.turbo)} turbo | R restart | G garage | H hitboxes`;
+      `P1 turn ${bindingLabels(p1.rotateLeft)}/${bindingLabels(p1.rotateRight)} | thrust ${bindingLabels(p1.thrust)} | brake ${bindingLabels(p1.brake)} | fire ${bindingLabels(p1.fire)} | gadget ${bindingLabels(p1.turbo)}\n` +
+      `P2 turn ${bindingLabels(p2.rotateLeft)}/${bindingLabels(p2.rotateRight)} | thrust ${bindingLabels(p2.thrust)} | brake ${bindingLabels(p2.brake)} | fire ${bindingLabels(p2.fire)} | gadget ${bindingLabels(p2.turbo)}\n` +
+      `R restart | G garage | H hitboxes`;
 
     this.createFixedText(18, 16, controls, {
       fontFamily: "monospace",
@@ -256,14 +257,19 @@ export class DuelScene extends Phaser.Scene {
     }
 
     if (!this.ships.p1.alive) {
-      this.endRound("Player 2 wins");
+      this.endRound("Player 2 wins", "p1");
     } else if (!this.ships.p2.alive) {
-      this.endRound("Player 1 wins");
+      this.endRound("Player 1 wins", "p2");
     }
   }
 
-  private endRound(message: string): void {
+  private endRound(message: string, destroyedPlayerId: PlayerId): void {
     this.roundOver = true;
+    const destroyedShip = this.ships[destroyedPlayerId];
+    this.effects.createShipDestruction(destroyedShip.shape.x, destroyedShip.shape.y, [
+      colorToNumber(destroyedShip.build.colors.primary, 0x8ecaff),
+      colorToNumber(destroyedShip.build.colors.secondary, 0xf2f8ff)
+    ]);
     this.ships.p1.body.setVelocity(0, 0);
     this.ships.p2.body.setVelocity(0, 0);
     this.messageText.setText(`${message}\nPress R to restart or G for garage`);
@@ -416,6 +422,7 @@ export class DuelScene extends Phaser.Scene {
       damageAsteroid: (id, amount) => {
         this.arena.damageAsteroidById(id, amount);
       },
+      spawnPassingAsteroid: () => this.arena.spawnPassingAsteroid().id,
       forceNextPickupDrop: (type) => {
         this.arena.forceNextPickupDrop(type);
       },
@@ -442,4 +449,12 @@ export class DuelScene extends Phaser.Scene {
 
 function getDuelCameraZoom(): number {
   return Math.min(VIEWPORT_WIDTH / ARENA_WIDTH, VIEWPORT_HEIGHT / ARENA_HEIGHT);
+}
+
+function colorToNumber(value: string | undefined, fallback: number): number {
+  if (!value || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+    return fallback;
+  }
+
+  return Number.parseInt(value.slice(1), 16);
 }

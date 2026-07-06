@@ -3,7 +3,12 @@ import {
   ASTEROID_COLLISION_COOLDOWN_MS,
   ASTEROID_DEFINITIONS,
   ASTEROID_SPAWN_COUNT,
-  getAsteroidCollisionDamage
+  PASSING_ASTEROID_DEFINITION,
+  PASSING_ASTEROID_EXIT_MARGIN,
+  createPassingAsteroidRoute,
+  getAsteroidCollisionDamage,
+  getPassingAsteroidCollisionDamage,
+  getPassingAsteroidSpawnDelay
 } from "../data/arenaObjects";
 import { ARENA_HEIGHT, ARENA_WIDTH } from "../data/balance";
 import { AsteroidEntity } from "../entities/AsteroidEntity";
@@ -15,24 +20,25 @@ import {
   type PickupType
 } from "./PickupSystem";
 import { segmentIntersectsCircle } from "./WeaponSystem";
-import { DuelEffects } from "./DuelEffects";
 import {
   PLAYER_IDS,
   type AsteroidDebugSnapshot,
   type PickupDebugSnapshot,
   type ShipMap
 } from "./DuelTypes";
+import { VisualEffectsSystem } from "./VisualEffectsSystem";
 
 export class ArenaObjectSystem {
   private asteroids: AsteroidEntity[] = [];
   private pickups: PickupEntity[] = [];
   private asteroidCollisionReadyAt = { p1: 0, p2: 0 };
   private forcedNextPickupDrop: PickupType | undefined;
+  private nextPassingAsteroidAt = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly ships: ShipMap,
-    private readonly effects: DuelEffects
+    private readonly effects: VisualEffectsSystem
   ) {}
 
   reset(): void {
@@ -40,16 +46,19 @@ export class ArenaObjectSystem {
     this.destroyAsteroids();
     this.asteroidCollisionReadyAt = { p1: 0, p2: 0 };
     this.forcedNextPickupDrop = undefined;
+    this.nextPassingAsteroidAt =
+      this.scene.time.now + getPassingAsteroidSpawnDelay(Math.random);
     this.spawnAsteroids();
   }
 
-  update(time: number): void {
+  update(time: number, deltaMs: number): void {
     for (const asteroid of this.asteroids) {
-      asteroid.update(time);
+      asteroid.update(time, deltaMs);
     }
     for (const pickup of this.pickups) {
       pickup.update(time);
     }
+    this.spawnPassingAsteroidIfReady(time);
     this.pruneDestroyed();
   }
 
@@ -150,6 +159,26 @@ export class ArenaObjectSystem {
     }
   }
 
+  spawnPassingAsteroid(): AsteroidEntity {
+    const route = createPassingAsteroidRoute(
+      Math.random,
+      ARENA_WIDTH,
+      ARENA_HEIGHT,
+      PASSING_ASTEROID_DEFINITION.radius
+    );
+    const asteroid = new AsteroidEntity(this.scene, {
+      id: `passing-asteroid-${Math.round(this.scene.time.now)}-${this.asteroids.length}`,
+      x: route.x,
+      y: route.y,
+      velocityX: route.velocityX,
+      velocityY: route.velocityY,
+      passing: true,
+      definition: PASSING_ASTEROID_DEFINITION
+    });
+    this.asteroids.push(asteroid);
+    return asteroid;
+  }
+
   getAsteroidSnapshots(): AsteroidDebugSnapshot[] {
     return this.getAsteroids().map((asteroid) => ({
       id: asteroid.id,
@@ -198,6 +227,15 @@ export class ArenaObjectSystem {
         })
       );
     }
+  }
+
+  private spawnPassingAsteroidIfReady(time: number): void {
+    if (time < this.nextPassingAsteroidAt) {
+      return;
+    }
+
+    this.spawnPassingAsteroid();
+    this.nextPassingAsteroidAt = time + getPassingAsteroidSpawnDelay(Math.random);
   }
 
   private findAsteroidSpawnPosition(radius: number): Phaser.Math.Vector2 {
@@ -255,9 +293,17 @@ export class ArenaObjectSystem {
           continue;
         }
 
-        const damage = getAsteroidCollisionDamage(ship.body.velocity.length());
+        const damage = getAsteroidShipCollisionDamage(
+          asteroid,
+          ship.body.velocity.length()
+        );
         ship.takeHullDamage(damage, time);
         this.knockShipAwayFromAsteroid(ship, asteroid);
+        this.effects.createHullSparks(
+          ship.shape.x,
+          ship.shape.y,
+          asteroid.definition.strokeColor
+        );
         this.effects.createImpact(
           ship.shape.x,
           ship.shape.y,
@@ -280,10 +326,16 @@ export class ArenaObjectSystem {
       ship.shape.x,
       ship.shape.y
     );
+    const passingPush = asteroid.isPassing ? 0.42 : 0;
+    const asteroidVelocity = asteroid.getVelocity();
     ship.body.velocity.x =
-      Math.cos(angle) * asteroid.definition.knockback + ship.body.velocity.x * 0.25;
+      Math.cos(angle) * asteroid.definition.knockback +
+      ship.body.velocity.x * 0.25 +
+      asteroidVelocity.x * passingPush;
     ship.body.velocity.y =
-      Math.sin(angle) * asteroid.definition.knockback + ship.body.velocity.y * 0.25;
+      Math.sin(angle) * asteroid.definition.knockback +
+      ship.body.velocity.y * 0.25 +
+      asteroidVelocity.y * passingPush;
   }
 
   private updatePickupCollection(time: number): void {
@@ -336,7 +388,30 @@ export class ArenaObjectSystem {
   }
 
   private pruneDestroyed(): void {
+    for (const asteroid of this.asteroids) {
+      if (
+        asteroid.isPassing &&
+        asteroid.isOutsideArena(
+          ARENA_WIDTH,
+          ARENA_HEIGHT,
+          PASSING_ASTEROID_EXIT_MARGIN + asteroid.getHitRadius()
+        )
+      ) {
+        asteroid.destroy();
+      }
+    }
     this.asteroids = this.asteroids.filter((asteroid) => !asteroid.isDestroyed);
     this.pickups = this.pickups.filter((pickup) => !pickup.isDestroyed);
   }
+}
+
+function getAsteroidShipCollisionDamage(
+  asteroid: AsteroidEntity,
+  shipSpeed: number
+): number {
+  if (!asteroid.isPassing) {
+    return getAsteroidCollisionDamage(shipSpeed);
+  }
+
+  return getPassingAsteroidCollisionDamage(shipSpeed + asteroid.getSpeed());
 }

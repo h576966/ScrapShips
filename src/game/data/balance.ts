@@ -18,5 +18,5 @@ export const SHIP_ATTRIBUTE_KEYS = [
   "turbo"
 ] as const satisfies ReadonlyArray<keyof ShipAttributes>;
 
-export const ARENA_WIDTH = 2200;
-export const ARENA_HEIGHT = 1400;
+export const ARENA_WIDTH = 2400;
+export const ARENA_HEIGHT = 1500;

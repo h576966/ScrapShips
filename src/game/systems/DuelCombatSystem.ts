@@ -13,7 +13,6 @@ import type { GadgetType } from "../model";
 import { MineEntity } from "../entities/MineEntity";
 import { Projectile } from "../entities/Projectile";
 import { ArenaObjectSystem } from "./ArenaObjectSystem";
-import { DuelEffects } from "./DuelEffects";
 import {
   getOpponentId,
   PLAYER_IDS,
@@ -36,6 +35,7 @@ import {
   scaleWeaponDamage,
   segmentIntersectsCircle
 } from "./WeaponSystem";
+import { VisualEffectsSystem } from "./VisualEffectsSystem";
 
 export class DuelCombatSystem {
   private readonly laserGraphics: Phaser.GameObjects.Graphics;
@@ -48,7 +48,7 @@ export class DuelCombatSystem {
     private readonly scene: Phaser.Scene,
     private readonly ships: ShipMap,
     private readonly arena: ArenaObjectSystem,
-    private readonly effects: DuelEffects
+    private readonly effects: VisualEffectsSystem
   ) {
     this.laserGraphics = scene.add.graphics();
     this.laserGraphics.setDepth(9);
@@ -179,6 +179,13 @@ export class DuelCombatSystem {
     });
 
     this.projectiles.push(projectile);
+    this.effects.createMuzzleFlash(
+      muzzle.x,
+      muzzle.y,
+      ship.getFacingAngle(),
+      projectile.impactColor,
+      weapon.type === "rail_shot" ? "rail_shot" : "bolt_cannon"
+    );
     ship.markFired(time, scaleWeaponCooldown(weapon, ship.effectiveAttributes.weapon));
   }
 
@@ -221,11 +228,7 @@ export class DuelCombatSystem {
     const endX = muzzle.x + Math.cos(angle) * weapon.range;
     const endY = muzzle.y + Math.sin(angle) * weapon.range;
 
-    this.laserGraphics.lineStyle(3, weapon.color, 0.85);
-    this.laserGraphics.beginPath();
-    this.laserGraphics.moveTo(muzzle.x, muzzle.y);
-    this.laserGraphics.lineTo(endX, endY);
-    this.laserGraphics.strokePath();
+    this.drawLaserBeam(muzzle.x, muzzle.y, endX, endY, weapon.color);
     this.damageAsteroidsWithLaser(ship, weapon, muzzle.x, muzzle.y, angle, time, delta);
 
     if (
@@ -240,9 +243,21 @@ export class DuelCombatSystem {
         targetRadius: target.getHitRadius()
       })
     ) {
-      target.takeDamage(getLaserDamage(weapon, ship.effectiveAttributes.weapon, delta), time);
+      const shieldBefore = target.shield;
+      target.takeDamage(
+        getLaserDamage(weapon, ship.effectiveAttributes.weapon, delta),
+        time
+      );
       if (time >= this.laserImpactReadyAt[ship.playerId]) {
-        this.effects.createImpact(target.shape.x, target.shape.y, weapon.color);
+        if (shieldBefore > 0) {
+          this.effects.createShieldShimmer(
+            target.shape.x,
+            target.shape.y,
+            target.getHitRadius()
+          );
+        } else {
+          this.effects.createLaserImpact(target.shape.x, target.shape.y, weapon.color);
+        }
         this.laserImpactReadyAt[ship.playerId] = time + 90;
       }
     }
@@ -253,6 +268,16 @@ export class DuelCombatSystem {
       projectile.update(time, delta);
       if (projectile.isDestroyed) {
         continue;
+      }
+
+      if (projectile.shouldEmitTrail(time, projectile.weapon.type === "rail_shot" ? 42 : 58)) {
+        this.effects.createProjectileTrail(
+          projectile.sprite.x,
+          projectile.sprite.y,
+          projectile.sprite.rotation,
+          projectile.impactColor,
+          projectile.weapon.type === "rail_shot" ? "rail_shot" : "bolt_cannon"
+        );
       }
 
       const asteroidHit = this.arena.findAsteroidHit(projectile);
@@ -331,7 +356,14 @@ export class DuelCombatSystem {
       );
       const damage = calculateMineDamage(distance, mine.definition);
       if (damage > 0) {
-        ship.takeDamage(damage, time);
+        this.damageShipWithFeedback(
+          ship,
+          damage,
+          time,
+          ship.shape.x,
+          ship.shape.y,
+          0xffd05f
+        );
       }
     }
 
@@ -392,7 +424,7 @@ export class DuelCombatSystem {
         const y = asteroid.shape.y;
         this.arena.damageAsteroid(asteroid, damage, time);
         if (time >= this.laserImpactReadyAt[ship.playerId]) {
-          this.effects.createImpact(x, y, weapon.color);
+          this.effects.createLaserImpact(x, y, weapon.color);
           this.laserImpactReadyAt[ship.playerId] = time + 90;
         }
       }
@@ -408,7 +440,14 @@ export class DuelCombatSystem {
       return;
     }
 
-    target.takeDamage(projectile.damage, time);
+    this.damageShipWithFeedback(
+      target,
+      projectile.damage,
+      time,
+      projectile.sprite.x,
+      projectile.sprite.y,
+      projectile.impactColor
+    );
     if (projectile.corrosive) {
       target.applyCorrosiveDamageOverTime(time);
     }
@@ -439,5 +478,44 @@ export class DuelCombatSystem {
     return this.mines.filter(
       (mine) => mine.ownerId === playerId && !mine.isDestroyed
     ).length;
+  }
+
+  private drawLaserBeam(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    color: number
+  ): void {
+    const layers = [
+      { width: 9, alpha: 0.14 },
+      { width: 5, alpha: 0.32 },
+      { width: 2, alpha: 0.94 }
+    ];
+    for (const layer of layers) {
+      this.laserGraphics.lineStyle(layer.width, color, layer.alpha);
+      this.laserGraphics.beginPath();
+      this.laserGraphics.moveTo(startX, startY);
+      this.laserGraphics.lineTo(endX, endY);
+      this.laserGraphics.strokePath();
+    }
+  }
+
+  private damageShipWithFeedback(
+    ship: DuelShipEntity,
+    damage: number,
+    time: number,
+    impactX: number,
+    impactY: number,
+    color: number
+  ): void {
+    const shieldBefore = ship.shield;
+    ship.takeDamage(damage, time);
+    if (shieldBefore > 0) {
+      this.effects.createShieldShimmer(ship.shape.x, ship.shape.y, ship.getHitRadius());
+      return;
+    }
+
+    this.effects.createHullSparks(impactX, impactY, color);
   }
 }

@@ -87,6 +87,7 @@ export type DuelDebugApi = {
   setAsteroidPose: (id: string, x: number, y: number) => void;
   setAsteroidHp: (id: string, hp: number) => void;
   damageAsteroid: (id: string, amount: number) => void;
+  spawnPassingAsteroid: () => string;
   forceNextPickupDrop: (type: PickupType) => void;
   spawnPickup: (type: PickupType, x: number, y: number, lifetimeMs?: number) => string;
 };

@@ -9,7 +9,12 @@ import {
   ASTEROID_COLLISION_COOLDOWN_MS,
   ASTEROID_DEFINITIONS,
   ASTEROID_SPAWN_COUNT,
-  getAsteroidCollisionDamage
+  PASSING_ASTEROID_DEFINITION,
+  PASSING_ASTEROID_SPEED,
+  createPassingAsteroidRoute,
+  getAsteroidCollisionDamage,
+  getPassingAsteroidCollisionDamage,
+  getPassingAsteroidSpawnDelay
 } from "../src/game/data/arenaObjects";
 import {
   PICKUP_DEFINITIONS,
@@ -30,16 +35,16 @@ describe("arena objects", () => {
   it("uses a duel arena larger than the viewport", () => {
     expect(ARENA_WIDTH).toBeGreaterThan(VIEWPORT_WIDTH);
     expect(ARENA_HEIGHT).toBeGreaterThan(VIEWPORT_HEIGHT);
-    expect(ARENA_WIDTH).toBeGreaterThanOrEqual(2000);
-    expect(ARENA_HEIGHT).toBeGreaterThanOrEqual(1200);
+    expect(ARENA_WIDTH).toBeGreaterThanOrEqual(2400);
+    expect(ARENA_HEIGHT).toBeGreaterThanOrEqual(1500);
   });
 
   it("defines valid asteroid configs", () => {
-    expect(ASTEROID_SPAWN_COUNT.min).toBeGreaterThanOrEqual(5);
-    expect(ASTEROID_SPAWN_COUNT.max).toBeLessThanOrEqual(8);
+    expect(ASTEROID_SPAWN_COUNT.min).toBeGreaterThanOrEqual(7);
+    expect(ASTEROID_SPAWN_COUNT.max).toBeLessThanOrEqual(10);
     expect(ASTEROID_COLLISION_COOLDOWN_MS).toBeGreaterThan(0);
 
-    for (const asteroid of ASTEROID_DEFINITIONS) {
+    for (const asteroid of [...ASTEROID_DEFINITIONS, PASSING_ASTEROID_DEFINITION]) {
       expect(asteroid.radius).toBeGreaterThan(0);
       expect(asteroid.maxHp).toBeGreaterThan(0);
       expect(asteroid.knockback).toBeGreaterThan(0);
@@ -50,11 +55,12 @@ describe("arena objects", () => {
     const small = createAsteroidVisualSpec(28, "small-rock");
     const large = createAsteroidVisualSpec(48, "large-rock");
 
-    expect(small.points.length / 2).toBeGreaterThanOrEqual(9);
-    expect(small.points.length / 2).toBeLessThanOrEqual(14);
+    expect(small.points.length / 2).toBeGreaterThanOrEqual(11);
+    expect(small.points.length / 2).toBeLessThanOrEqual(17);
     expect(small.highlightPoints.length).toBe(small.points.length);
     expect(small.shadowPoints.length).toBe(small.points.length);
-    expect(small.pits.length).toBeGreaterThanOrEqual(2);
+    expect(small.pits.length).toBeGreaterThanOrEqual(3);
+    expect(small.surfaceLines.length).toBeGreaterThanOrEqual(2);
     expect(large.points).not.toEqual(small.points);
     expect(Math.abs(small.rotationSpeed)).toBeGreaterThan(0);
   });
@@ -63,6 +69,30 @@ describe("arena objects", () => {
     expect(getAsteroidCollisionDamage(0)).toBe(5);
     expect(getAsteroidCollisionDamage(250)).toBeGreaterThan(5);
     expect(getAsteroidCollisionDamage(900)).toBe(10);
+  });
+
+  it("creates infrequent passing asteroid routes and stronger impact damage", () => {
+    const route = createPassingAsteroidRoute(
+      () => 0.25,
+      ARENA_WIDTH,
+      ARENA_HEIGHT,
+      PASSING_ASTEROID_DEFINITION.radius
+    );
+    const speed = Math.hypot(route.velocityX, route.velocityY);
+
+    expect(getPassingAsteroidSpawnDelay(() => 0)).toBeGreaterThanOrEqual(12000);
+    expect(getPassingAsteroidSpawnDelay(() => 1)).toBeLessThanOrEqual(22000);
+    expect(speed).toBeGreaterThanOrEqual(PASSING_ASTEROID_SPEED.min - 1);
+    expect(speed).toBeLessThanOrEqual(PASSING_ASTEROID_SPEED.max + 1);
+    expect(
+      route.x < 0 ||
+        route.x > ARENA_WIDTH ||
+        route.y < 0 ||
+        route.y > ARENA_HEIGHT
+    ).toBe(true);
+    expect(getPassingAsteroidCollisionDamage(speed)).toBeGreaterThan(
+      getAsteroidCollisionDamage(speed)
+    );
   });
 
   it("defines a 20 percent pickup chance with a complete drop table", () => {
